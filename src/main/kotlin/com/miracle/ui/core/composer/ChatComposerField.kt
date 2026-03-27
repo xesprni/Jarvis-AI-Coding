@@ -380,7 +380,7 @@ class ChatComposerField(
                 lookup.addLookupListener(object : LookupListener {
                     override fun itemSelected(event: LookupEvent) {
                         val item = event.item?.getUserData(ChatComposerLookupItem.KEY) as? SlashCommandLookupItem ?: return
-                        val invocationText = ChatComposerSupport.buildSlashInvocationText(item.command)
+                        val invocationText = ChatComposerSupport.buildSlashInvocationText(item.command, appendTrailingSpace = true)
                         runUndoTransparentWriteAction {
                             val selectionRange = when (insertMode) {
                                 SlashInsertMode.REPLACE_ALL_INPUT -> {
@@ -598,12 +598,11 @@ class ChatComposerField(
 
         val editorEx = editor as? EditorEx ?: return
         if (editorEx.isDisposed) return
-        val insertedAtEnd = event.offset + event.newLength == text.length
-        if (!insertedAtEnd) return
 
         val knownCommands = SlashCommandRegistry.getCommands(project, SlashCommandScope.ALL)
             .map { it.command.lowercase() }
             .sortedByDescending { it.length }
+
         val hasTailMatchedSlash = slashHighlighters.any { highlighter ->
             highlighter.isValid && highlighter.endOffset == text.length
         }

@@ -197,7 +197,10 @@ internal class ComposerCheckpointRestorePanel(
     private fun JButton.applySmallChipBorder() {
         border = BorderFactory.createCompoundBorder(
             createRoundedBorder(ChatTheme.PLAN_ACTION_SECONDARY_BORDER),
-            JBUI.Borders.empty(2, 6),
+            JBUI.Borders.empty(1, 4),
         )
+        val fixedSize = preferredSize
+        minimumSize = fixedSize
+        maximumSize = fixedSize
     }
 }

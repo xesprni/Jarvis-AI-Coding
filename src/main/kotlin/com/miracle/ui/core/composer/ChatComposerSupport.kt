@@ -100,9 +100,13 @@ object ChatComposerSupport {
         }
     }
 
-    fun buildSlashInvocationText(command: SlashCommand): String {
+    fun buildSlashInvocationText(command: SlashCommand, appendTrailingSpace: Boolean = false): String {
         if (command.argumentTemplates.isEmpty()) {
-            return command.command
+            return if (appendTrailingSpace) {
+                command.command + " "
+            } else {
+                command.command
+            }
         }
         return buildString {
             append(command.command)
