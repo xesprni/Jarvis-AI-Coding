@@ -14,6 +14,7 @@ class JarvisToolWindowFactory : ToolWindowFactory, DumbAware {
         val panel = JarvisToolWindowPanel(project, toolWindow.disposable)
         project.getService(JarvisToolWindowService::class.java).bind(panel)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
+        content.setDisposer(panel)
         toolWindow.contentManager.removeAllContents(true)
         toolWindow.contentManager.addContent(content)
     }

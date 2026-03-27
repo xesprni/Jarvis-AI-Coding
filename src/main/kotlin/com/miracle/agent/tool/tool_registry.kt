@@ -3,7 +3,7 @@ package com.miracle.agent.tool
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.PlatformUtils
 import com.miracle.agent.mcp.McpClientHub
-import com.miracle.agent.mcp.McpClientHub.Companion.MCP_SERVER_PREFIX
+import com.miracle.ui.smartconversation.settings.configuration.ChatMode
 import dev.langchain4j.agent.tool.ToolSpecification
 import kotlin.reflect.full.companionObjectInstance
 
@@ -12,30 +12,27 @@ object ToolRegistry {
     private val LOG = Logger.getInstance(ToolRegistry::class.java)
     private val TOOLS = mutableMapOf<String, Tool<*>>()
     private val ASK_TOOL_NAMES = setOf(
-        TaskTool.getName(),
-        GlobTool.getName(),
-        GrepTool.getName(),
-        ResolveClassNameTool.getName(),
-        ReadClassTool.getName(),
-        ReadTool.getName(),
-        ExcelReadTool.getName(),
+        "Task",
+        "Glob",
+        "Grep",
+        "ResolveClassName",
+        "ReadClass",
+        "Read",
+        "ExcelRead",
 //        LsTool.getName(),
 //        McpTool.getName(),
-        AskUserQuestionTool.getName(),
-        SkillTool.getName(),
+        "AskUserQuestion",
+        "Skill",
     )
     private val PLAN_TOOL_NAMES = setOf(
-        TaskTool.getName(),
-        GlobTool.getName(),
-        GrepTool.getName(),
-        ReadTool.getName(),
-        ResolveClassNameTool.getName(),
-        ReadClassTool.getName(),
-        ExcelReadTool.getName(),
-        AskUserQuestionTool.getName(),
-        SkillTool.getName(),
-        WriteTool.getName(),
-        ExitPlanModeTool.getName(),
+        "Glob",
+        "Grep",
+        "Read",
+        "ResolveClassName",
+        "ReadClass",
+        "ListImplementations",
+        "ExcelRead",
+        "RequestUserInput",
     )
 
     private fun autoRegisterTools() {
@@ -55,9 +52,8 @@ object ToolRegistry {
 //                MultiEditTool::class,
                 TodoWriteTool::class,
                 AskUserQuestionTool::class,
+                RequestUserInputTool::class,
                 SkillTool::class,
-                EnterPlanModeTool::class,
-                ExitPlanModeTool::class,
                 // 这里可以添加更多实现Tool接口的类
 //                McpTool::class,
             )
@@ -106,7 +102,14 @@ object ToolRegistry {
     }
 
     fun getToolSpecifications(tools: List<Tool<*>>?): List<ToolSpecification>? {
-        return tools?.map { it.getToolSpecification() }
+        return tools?.mapNotNull { tool ->
+            try {
+                tool.getToolSpecification()
+            } catch (e: Exception) {
+                LOG.warn("Failed to load tool specification for ${tool::class.simpleName}: ${e.message}")
+                null
+            }
+        }
     }
 
     /**
@@ -141,7 +144,20 @@ object ToolRegistry {
     }
 
     fun getPlanTools(): Map<String, Tool<*>> {
-        return getAll().filterKeys { it in PLAN_TOOL_NAMES || it.startsWith(MCP_SERVER_PREFIX) }
+        return getAll().filterKeys { it in PLAN_TOOL_NAMES }
+    }
+
+    fun filterToolsForMode(chatMode: ChatMode, tools: List<Tool<*>>): List<Tool<*>> {
+        val allowedNames = when (chatMode) {
+            ChatMode.PLAN -> PLAN_TOOL_NAMES
+            ChatMode.ASK -> ASK_TOOL_NAMES
+            else -> null
+        }
+        return if (allowedNames == null) {
+            tools
+        } else {
+            tools.filter { it.getName() in allowedNames }
+        }
     }
 
     fun isPlanTool(name: String): Boolean {

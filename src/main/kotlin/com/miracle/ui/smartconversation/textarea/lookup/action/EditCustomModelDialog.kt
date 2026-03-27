@@ -7,12 +7,15 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
+import com.miracle.services.ModelApiStyle
 import com.miracle.services.ModelConfig
 import com.miracle.services.isCustomModelExists
+import com.miracle.services.requiresApiCredentials
 import java.awt.Dimension
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import javax.swing.JComponent
+import javax.swing.JComboBox
 import javax.swing.JPanel
 import javax.swing.JPasswordField
 
@@ -42,10 +45,22 @@ class EditCustomModelDialog(
         preferredSize = Dimension(JBUI.scale(150), preferredSize.height)
     }
 
+    private val apiStyleComboBox = JComboBox(ModelApiStyle.entries.toTypedArray()).apply {
+        preferredSize = Dimension(JBUI.scale(180), preferredSize.height)
+        selectedItem = originalModel.resolvedApiStyle
+    }
+
+    private val reasoningEffortComboBox = JComboBox(AddCustomModelDialog.REASONING_OPTIONS).apply {
+        preferredSize = Dimension(JBUI.scale(180), preferredSize.height)
+        selectedItem = originalModel.resolvedReasoningEffort ?: "默认"
+    }
+
     private val supportsImagesCheckBox = JBCheckBox("支持多模态(图片)", originalModel.supportsImages)
 
     init {
         title = "编辑自定义模型"
+        apiStyleComboBox.addActionListener { updateCredentialFieldState() }
+        updateCredentialFieldState()
         init()
     }
 
@@ -67,7 +82,9 @@ class EditCustomModelDialog(
         addRow(form, c, 2, "API 地址:", endpointField)
         addRow(form, c, 3, "API Key(留空不修改):", apiKeyField)
         addRow(form, c, 4, "上下文长度:", contextTokensField)
-        addRow(form, c, 5, "", supportsImagesCheckBox)
+        addRow(form, c, 5, "接口类型:", apiStyleComboBox)
+        addRow(form, c, 6, "Reasoning:", reasoningEffortComboBox)
+        addRow(form, c, 7, "", supportsImagesCheckBox)
 
         return form
     }
@@ -80,12 +97,15 @@ class EditCustomModelDialog(
         if (modelName != originalModel.model && isCustomModelExists(modelName)) {
             return ValidationInfo("模型 '$modelName' 已存在", modelNameField)
         }
-        if (endpointField.text.trim().isBlank()) {
-            return ValidationInfo("请输入 API 地址", endpointField)
-        }
-        val newApiKey = String(apiKeyField.password).trim()
-        if (newApiKey.isBlank() && originalModel.apiKey.isNullOrBlank()) {
-            return ValidationInfo("请输入 API Key", apiKeyField)
+        val apiStyle = apiStyleComboBox.selectedItem as? ModelApiStyle ?: ModelApiStyle.CHAT_COMPLETIONS
+        if (apiStyle.requiresApiCredentials()) {
+            if (endpointField.text.trim().isBlank()) {
+                return ValidationInfo("请输入 API 地址", endpointField)
+            }
+            val newApiKey = String(apiKeyField.password).trim()
+            if (newApiKey.isBlank() && originalModel.apiKey.isNullOrBlank()) {
+                return ValidationInfo("请输入 API Key", apiKeyField)
+            }
         }
         val contextTokens = contextTokensField.text.toIntOrNull()
         if (contextTokens == null || contextTokens <= 0) {
@@ -101,6 +121,8 @@ class EditCustomModelDialog(
             apiKey = String(apiKeyField.password).trim(),
             contextTokens = contextTokensField.text.toInt(),
             alias = aliasField.text.trim(),
+            apiStyle = apiStyleComboBox.selectedItem as? ModelApiStyle ?: ModelApiStyle.CHAT_COMPLETIONS,
+            reasoningEffort = AddCustomModelDialog.parseReasoningEffort(reasoningEffortComboBox.selectedItem as? String),
             supportsImages = supportsImagesCheckBox.isSelected
         )
     }
@@ -118,5 +140,22 @@ class EditCustomModelDialog(
         fieldConstraints.gridy = row
         fieldConstraints.weightx = 1.0
         panel.add(field, fieldConstraints)
+    }
+
+    private fun updateCredentialFieldState() {
+        val apiStyle = apiStyleComboBox.selectedItem as? ModelApiStyle ?: ModelApiStyle.CHAT_COMPLETIONS
+        val requiresCredentials = apiStyle.requiresApiCredentials()
+        endpointField.isEnabled = requiresCredentials
+        apiKeyField.isEnabled = requiresCredentials
+        endpointField.emptyText.text = if (requiresCredentials) {
+            "例如: https://api.openai.com/v1"
+        } else {
+            "Codex CLI 模式下不需要填写"
+        }
+        apiKeyField.toolTipText = if (requiresCredentials) {
+            "留空表示不修改已保存的 API Key"
+        } else {
+            "Codex CLI 使用本机 codex login 登录态"
+        }
     }
 }

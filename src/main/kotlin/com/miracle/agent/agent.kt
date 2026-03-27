@@ -54,10 +54,6 @@ data class TaskState(
     var complete: Boolean = false,       // 是否已结束
     var abort: Boolean = false,          // 是否被中断
     val project: Project,
-    
-    // Embedded Plan Mode 相关字段
-    var isEmbeddedPlanMode: Boolean = false,        // 是否处于内嵌计划模式（区别于独立计划模式）
-    var originalChatMode: ChatMode? = null,         // 进入内嵌计划模式前的原始模式
 
     var apiRequestCount: Int = 0,
     var consecutiveMistakeCount: Int = 0,   // 连续的错误次数
@@ -128,7 +124,6 @@ data class TaskState(
         }
         systemReminderService = cachedServices.systemReminderService
         systemReminderService!!.chatMode = chatMode
-        systemReminderService!!.isEmbeddedPlanMode = isEmbeddedPlanMode
         fileFreshnessService = cachedServices.fileFreshnessService
         try {
             // 创建持久化的shell实例用于执行命令
@@ -138,15 +133,6 @@ data class TaskState(
         }
         // 生成MCP提示词
         mcpPrompt = McpPromptIntegration.generateMcpPromptSection(project)
-    }
-    
-    /**
-     * 同步内嵌计划模式状态到SystemReminderService
-     * 在EnterPlanModeTool/ExitPlanModeTool中切换模式时调用
-     */
-    fun syncPlanModeState() {
-        systemReminderService?.chatMode = chatMode
-        systemReminderService?.isEmbeddedPlanMode = isEmbeddedPlanMode
     }
 }
 
@@ -181,6 +167,7 @@ class Task(
     private var model: StreamingChatModel? = null
     private var toolSpecs: List<ToolSpecification>? = null
     private var currentModelId: String = modelId
+    private val effectiveTools = ToolRegistry.filterToolsForMode(chatMode, tools)
 
     init {
         val hasNewUserInput = userInput != null || images != null || files != null
@@ -223,7 +210,7 @@ class Task(
             chatHistory = historyStore,
             modelId = currentModelId,
             chatMode = chatMode,
-            tools = tools.associateBy { it.getName() },
+            tools = effectiveTools.associateBy { it.getName() },
             historyAiMessage = historyAiMessage,
             project = project,
         )
@@ -312,12 +299,7 @@ class Task(
         try {
             taskState.emit = { trySend(it) }
             taskState.refreshToolSpecs = { refreshToolSpecs() }
-            // 根据 chatMode 选择合适的工具集合
-            toolSpecs = when (taskState.chatMode) {
-                ChatMode.PLAN -> ToolRegistry.getToolSpecifications(ToolRegistry.getPlanTools().values.toList())
-                ChatMode.ASK -> ToolRegistry.getToolSpecifications(ToolRegistry.getAskTools().values.toList())
-                else -> ToolRegistry.getToolSpecifications(tools)
-            }
+            toolSpecs = ToolRegistry.getToolSpecifications(taskState.tools.values.toList())
             taskState.apiRequestCount = 0
 
             refreshModelIfNeeded(force = true)
@@ -332,9 +314,9 @@ class Task(
                     // 请求模型
                     val aiMessage = recursivelyMakeJarvisRequests() ?: continue
                     if (!aiMessage.text().isNullOrBlank()) {
-                        val parser = SseMessageParser()
+                        val parser = CompleteMessageParser()
                         val segments = parser.parse(aiMessage.text()!!)
-                            .filter { it is TextSegment || it is Code || it is SearchReplace }
+                            .filter { it is TextSegment || it is Code || it is SearchReplace || it is ProposedPlanSegment }
                         taskState.historyAiMessage.segments.addAll(segments)
                     }
                     // 工具调用
@@ -401,11 +383,7 @@ class Task(
      * 当 chatMode 动态切换时（如进入/退出 Plan 模式）需要调用此方法
      */
     fun refreshToolSpecs() {
-        toolSpecs = when (taskState.chatMode) {
-            ChatMode.PLAN -> ToolRegistry.getToolSpecifications(ToolRegistry.getPlanTools().values.toList())
-            ChatMode.ASK -> ToolRegistry.getToolSpecifications(ToolRegistry.getAskTools().values.toList())
-            else -> ToolRegistry.getToolSpecifications(tools)
-        }
+        toolSpecs = ToolRegistry.getToolSpecifications(taskState.tools.values.toList())
     }
 
     private fun validateImageSupport(modelConfig: ModelConfig, project: Project) {
@@ -611,32 +589,33 @@ class Task(
 
     private suspend fun generateConversationTitle(taskState: TaskState) {
         val messages = taskState.chatMemory.messages()
-        // 调用模型生成标题
-        val model = getChatModel(currentModelId)
         val systemMessage = systemMessage(PromptService.getConvTitlePrompt())
         try {
             val conv = ConversationStore.getConversation(taskState.project, taskState.convId)!!
-            val response = model.chat {
-                this.messages.add(systemMessage)
-                this.messages.addAll(messages)
-                parameters {
-                    this.responseFormat = ResponseFormat.builder()
-                        .type(ResponseFormatType.JSON)
-                        .jsonSchema(
-                            JsonSchema.builder()
-                                .name("Conversation")
-                                .rootElement(
-                                    JsonObjectSchema.builder()
-                                        .addBooleanProperty("isNewTopic")
-                                        .addStringProperty("title")
-                                        .required("isNewTopic")
-                                        .build()
-                                )
-                                .build()
-                        )
-                        .build()
+            val response = executeChatRequest(
+                modelId = currentModelId,
+                request = chatRequest {
+                    this.messages.add(systemMessage)
+                    this.messages.addAll(messages)
+                    parameters {
+                        this.responseFormat = ResponseFormat.builder()
+                            .type(ResponseFormatType.JSON)
+                            .jsonSchema(
+                                JsonSchema.builder()
+                                    .name("Conversation")
+                                    .rootElement(
+                                        JsonObjectSchema.builder()
+                                            .addBooleanProperty("isNewTopic")
+                                            .addStringProperty("title")
+                                            .required("isNewTopic")
+                                            .build()
+                                    )
+                                    .build()
+                            )
+                            .build()
+                    }
                 }
-            }
+            )
             response.aiMessage().text()?.let {jsonStr ->
                 val cleaned = jsonStr
                     .replace(Regex("^```(?:json)?", RegexOption.MULTILINE), "")

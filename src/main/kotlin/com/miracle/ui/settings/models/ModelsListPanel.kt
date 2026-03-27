@@ -9,10 +9,11 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.miracle.services.ModelConfig
-import com.miracle.services.deleteCustomModel
-import com.miracle.services.getCustomModels
-import com.miracle.services.addCustomModel
 import com.miracle.services.updateCustomModel
+import com.miracle.services.addCustomModel
+import com.miracle.services.deleteCustomModel
+import com.miracle.services.formatReasoningEffort
+import com.miracle.services.getCustomModels
 import com.miracle.ui.settings.mcp.components.McpUiComponents
 import com.miracle.ui.smartconversation.textarea.lookup.action.AddCustomModelDialog
 import com.miracle.ui.smartconversation.textarea.lookup.action.EditCustomModelDialog
@@ -191,7 +192,13 @@ class ModelsListPanel(
         // ── description body ──
 
         val descText = buildString {
-            append("Endpoint: ${model.endpoint}")
+            if (model.resolvedApiStyle == com.miracle.services.ModelApiStyle.CODEX_CLI) {
+                append("登录方式: 本机 codex login")
+            } else {
+                append("Endpoint: ${model.endpoint}")
+            }
+            append("  |  ${model.resolvedApiStyle.desc}")
+            append("  |  Reasoning ${formatReasoningEffort(model.resolvedReasoningEffort)}")
             if (model.supportsImages) append("  |  多模态")
         }
 
@@ -253,6 +260,8 @@ class ModelsListPanel(
                     apiKey = info.apiKey,
                     contextTokens = info.contextTokens,
                     alias = info.alias.ifBlank { null },
+                    apiStyle = info.apiStyle,
+                    reasoningEffort = info.reasoningEffort,
                     supportsImages = info.supportsImages,
                 )
                 onModelsChanged?.invoke()
@@ -275,6 +284,8 @@ class ModelsListPanel(
                     apiKey = info.apiKey.ifBlank { null },
                     contextTokens = info.contextTokens,
                     alias = info.alias.ifBlank { null },
+                    apiStyle = info.apiStyle,
+                    reasoningEffort = info.reasoningEffort,
                     supportsImages = info.supportsImages,
                 )
                 onModelsChanged?.invoke()

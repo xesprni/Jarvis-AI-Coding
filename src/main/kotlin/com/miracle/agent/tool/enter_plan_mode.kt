@@ -3,9 +3,7 @@ package com.miracle.agent.tool
 import com.miracle.agent.TaskState
 import com.miracle.agent.parser.ToolSegment
 import com.miracle.agent.parser.UiToolName
-import com.miracle.ui.smartconversation.settings.configuration.ChatMode
 import com.miracle.utils.JsonField
-import com.miracle.utils.getPlanDirectory
 import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import kotlinx.serialization.json.JsonElement
@@ -97,21 +95,9 @@ In plan mode, you'll:
 
     override fun renderResultForAssistant(output: EnterPlanModeOutput): String {
         return if (output.approved) {
-            val planDir = output.planDirectory
-            """Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.
-
-In plan mode, you should:
-1. Thoroughly explore the codebase to understand existing patterns
-2. Identify similar features and architectural approaches
-3. Consider multiple approaches and their trade-offs
-4. Use AskUserQuestion if you need to clarify the approach
-5. Design a concrete implementation strategy
-6. When ready, use ExitPlanMode to present your plan for approval
-
-Remember: DO NOT write or edit any files yet (except the plan file in $planDir). This is a read-only exploration and planning phase.
-"""
+            "EnterPlanMode is deprecated. Switch to Plan mode from the UI before sending the request."
         } else {
-            "User declined to enter plan mode. Continue with the task execution directly without the planning phase."
+            "EnterPlanMode is no longer available."
         }
     }
 
@@ -148,26 +134,14 @@ Remember: DO NOT write or edit any files yet (except the plan file in $planDir).
     }
 
     fun execute(taskState: TaskState, reason: String): ToolCallResult<EnterPlanModeOutput> {
-
-        val planDir = getPlanDirectory(taskState.project, taskState.convId)
-
-        // 保存原始模式并切换到计划模式
-        taskState.originalChatMode = taskState.chatMode
-        taskState.chatMode = ChatMode.PLAN
-        taskState.isEmbeddedPlanMode = true
-        // 同步状态到SystemReminderService
-        taskState.syncPlanModeState()
-        // 刷新工具规范，只暴露 Plan 模式下允许的工具
-        taskState.refreshToolSpecs?.invoke()
-
         val output = EnterPlanModeOutput(
-            approved = true,
+            approved = false,
             reason = reason,
-            planDirectory = planDir
+            planDirectory = ""
         )
-        
+
         return ToolCallResult(
-            type = "result",
+            type = "error",
             data = output,
             resultForAssistant = renderResultForAssistant(output)
         )

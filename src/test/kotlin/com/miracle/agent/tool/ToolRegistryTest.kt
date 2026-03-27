@@ -54,13 +54,18 @@ class ToolRegistryTest {
         assertTrue(planTools.containsKey("Read"), "Plan mode should include Read tool")
         assertTrue(planTools.containsKey("Grep"), "Plan mode should include Grep tool")
         assertTrue(planTools.containsKey("Glob"), "Plan mode should include Glob tool")
-        assertTrue(planTools.containsKey("Write"), "Plan mode should include Write tool")
-        assertTrue(planTools.containsKey("ExitPlanMode"), "Plan mode should include ExitPlanMode tool")
-        
+        assertTrue(planTools.containsKey("RequestUserInput"), "Plan mode should include RequestUserInput tool")
+        assertTrue(planTools.containsKey("ListImplementations"), "Plan mode should include ListImplementations tool")
+
         // 验证 Plan 模式下不应该包含的工具
         assertFalse(planTools.containsKey("Bash"), "Plan mode should NOT include Bash tool")
         assertFalse(planTools.containsKey("Edit"), "Plan mode should NOT include Edit tool")
-        
+        assertFalse(planTools.containsKey("Write"), "Plan mode should NOT include Write tool")
+        assertFalse(planTools.containsKey("Task"), "Plan mode should NOT include Task tool")
+        assertFalse(planTools.containsKey("Skill"), "Plan mode should NOT include Skill tool")
+        assertFalse(planTools.containsKey("EnterPlanMode"), "Plan mode should NOT include EnterPlanMode")
+        assertFalse(planTools.containsKey("ExitPlanMode"), "Plan mode should NOT include ExitPlanMode")
+
         println("Plan mode tools: ${planTools.keys}")
     }
 
@@ -92,7 +97,9 @@ class ToolRegistryTest {
         val planToolNames = planSpecs.map { it.name() }
         assertTrue(planToolNames.contains("Read"), "Plan specs should include Read")
         assertFalse(planToolNames.contains("Bash"), "Plan specs should NOT include Bash")
-        
+        assertFalse(planToolNames.contains("Write"), "Plan specs should NOT include Write")
+        assertFalse(planToolNames.contains("ExitPlanMode"), "Plan specs should NOT include ExitPlanMode")
+
         println("Plan tool specifications: $planToolNames")
     }
 }

@@ -10,12 +10,20 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.miracle.agent.parser.Code
 import com.miracle.agent.parser.ErrorSegment
+import com.miracle.agent.parser.ProposedPlanSegment
 import com.miracle.agent.parser.SearchReplace
 import com.miracle.agent.parser.Segment
 import com.miracle.agent.parser.TextSegment
 import com.miracle.agent.parser.ToolSegment
 import com.miracle.agent.parser.getToolSegmentHeader
 import com.miracle.ui.core.ChatTheme.PANEL_BACKGROUND
+import com.miracle.ui.core.ChatTheme.PLAN_BADGE_BACKGROUND
+import com.miracle.ui.core.ChatTheme.PLAN_BADGE_BORDER
+import com.miracle.ui.core.ChatTheme.PLAN_BADGE_FOREGROUND
+import com.miracle.ui.core.ChatTheme.PLAN_CARD_BACKGROUND
+import com.miracle.ui.core.ChatTheme.PLAN_CARD_BORDER_COLOR
+import com.miracle.ui.core.ChatTheme.PLAN_CARD_HEADER_BACKGROUND
+import com.miracle.ui.core.ChatTheme.PLAN_CARD_SURFACE_BACKGROUND
 import com.miracle.ui.core.ChatTheme.ROUNDED_BORDER_COLOR
 import com.miracle.ui.core.ChatTheme.TOOL_CONTENT_BACKGROUND
 import com.miracle.ui.core.ChatTheme.TOOL_TITLE_FOREGROUND
@@ -26,6 +34,7 @@ import java.awt.Color
 import java.awt.Component
 import java.awt.Cursor
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.Font
 import javax.swing.BorderFactory
 import javax.swing.Box
@@ -51,6 +60,7 @@ internal class SegmentRendererFactory(
     private val project: Project,
     private val scrollManager: ChatScrollManager,
     private val onAskReply: ((String) -> Unit)? = null,
+    private val onProposedPlanAction: ((ProposedPlanAction, ProposedPlanSegment) -> Unit)? = null,
 ) {
 
     private val toolViewers = ToolViewerFactory(project, scrollManager, this, onAskReply)
@@ -63,6 +73,7 @@ internal class SegmentRendererFactory(
             is ErrorSegment -> createMarkdownBlock(segment.text, error = true)
             is Code -> createCodeBlock(segment)
             is SearchReplace -> createSearchReplaceBlock(segment)
+            is ProposedPlanSegment -> createProposedPlanBlock(segment)
             is ToolSegment -> createToolBlock(segment)
             else -> createMarkdownBlock(segment.content)
         }
@@ -76,6 +87,7 @@ internal class SegmentRendererFactory(
                 is ErrorSegment -> segment.text
                 is Code -> segment.code
                 is SearchReplace -> "SEARCH\n${segment.search}\n\nREPLACE\n${segment.replace}"
+                is ProposedPlanSegment -> segment.markdown
                 is ToolSegment -> listOf(segment.toolCommand, segment.toolContent)
                     .filter { it.isNotBlank() }.joinToString("\n\n")
                 else -> segment.content
@@ -254,6 +266,109 @@ internal class SegmentRendererFactory(
         )
     }
 
+    private fun createProposedPlanBlock(segment: ProposedPlanSegment): JComponent {
+        val title = JBLabel("Proposed Plan", AllIcons.Actions.MenuOpen, SwingConstants.LEFT).apply {
+            font = JBFont.label().asBold()
+            foreground = TOOL_TITLE_FOREGROUND
+        }
+        val badge = createBadgeLabel(
+            text = "Read-only Plan",
+            background = PLAN_BADGE_BACKGROUND,
+            foreground = PLAN_BADGE_FOREGROUND,
+            borderColor = PLAN_BADGE_BORDER,
+        )
+        val titleRow = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(title)
+            add(Box.createHorizontalStrut(JBUI.scale(8)))
+            add(badge)
+            add(Box.createHorizontalGlue())
+        }
+        val subtitle = JBLabel(
+            "<html><body>Keep refining the plan here, or hand it to Agent when you are ready to execute.</body></html>",
+        ).apply {
+            font = JBFont.small()
+            foreground = ChatTheme.MUTED_FOREGROUND
+            border = JBUI.Borders.emptyTop(6)
+            alignmentX = Component.LEFT_ALIGNMENT
+        }
+        val header = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = true
+            background = PLAN_CARD_HEADER_BACKGROUND
+            alignmentX = Component.LEFT_ALIGNMENT
+            border = JBUI.Borders.empty(12, 12, 10, 12)
+            add(titleRow)
+            add(subtitle)
+            maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+        }
+        val body = createMarkdownBlock(segment.markdown)
+        val bodyPanel = JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = PLAN_CARD_SURFACE_BACKGROUND
+            alignmentX = Component.LEFT_ALIGNMENT
+            border = BorderFactory.createCompoundBorder(
+                createRoundedBorder(PLAN_CARD_BORDER_COLOR),
+                JBUI.Borders.empty(10, 12),
+            )
+            add(body, BorderLayout.CENTER)
+            maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+        }
+        val actions = onProposedPlanAction?.let { actionHandler ->
+            JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+                isOpaque = false
+                alignmentX = Component.LEFT_ALIGNMENT
+                border = JBUI.Borders.emptyTop(12)
+                add(
+                    createActionButton(
+                        "\u7EE7\u7EED\u63D0\u95EE",
+                        "\u4FDD\u6301\u5728 Plan \u6A21\u5F0F\u4E0B\u7EE7\u7EED\u8BA8\u8BBA\u8FD9\u4E2A\u8BA1\u5212",
+                        primary = false,
+                    ) {
+                        actionHandler(ProposedPlanAction.ASK_FOLLOW_UP, segment)
+                    },
+                )
+                add(
+                    createActionButton(
+                        "\u5207\u6362\u5230 Agent \u6267\u884C",
+                        "\u5207\u6362\u5230 Agent \u6A21\u5F0F\u5E76\u7EE7\u7EED\u6267\u884C\u8FD9\u4E2A\u8BA1\u5212",
+                        primary = true,
+                    ) {
+                        actionHandler(ProposedPlanAction.EXECUTE_IN_AGENT, segment)
+                    },
+                )
+                maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+            }
+        }
+        val actionHint = onProposedPlanAction?.let {
+            JBLabel(
+                "<html><body>\u7EE7\u7EED\u63D0\u95EE\u4F1A\u7559\u5728 Plan \u6A21\u5F0F\uFF0C\u4E00\u952E\u6267\u884C\u4F1A\u5207\u5230 Agent \u5E76\u7ACB\u5373\u5F00\u59CB\u3002</body></html>",
+            ).apply {
+                font = JBFont.small()
+                foreground = ChatTheme.MUTED_FOREGROUND
+                border = JBUI.Borders.emptyTop(8)
+                alignmentX = Component.LEFT_ALIGNMENT
+            }
+        }
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = true
+            background = PLAN_CARD_BACKGROUND
+            border = BorderFactory.createCompoundBorder(
+                createRoundedBorder(PLAN_CARD_BORDER_COLOR),
+                JBUI.Borders.empty(0),
+            )
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(header)
+            add(Box.createVerticalStrut(JBUI.scale(10)))
+            add(bodyPanel)
+            actions?.let { add(it) }
+            actionHint?.let { add(it) }
+        }
+    }
+
     // ── Tool block ───────────────────────────────────────────────────
 
     private fun createToolBlock(segment: ToolSegment): JComponent {
@@ -318,4 +433,9 @@ internal class SegmentRendererFactory(
             path
         }
     }
+}
+
+internal enum class ProposedPlanAction {
+    ASK_FOLLOW_UP,
+    EXECUTE_IN_AGENT,
 }

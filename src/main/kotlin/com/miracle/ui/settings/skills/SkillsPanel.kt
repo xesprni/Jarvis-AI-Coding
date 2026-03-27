@@ -45,11 +45,12 @@ class SkillsPanel(private val project: Project, parentDisposable: Disposable) : 
         isOpaque = false
         border = JBUI.Borders.emptyTop(8)
     }
-    private val refreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    private val refreshAlarm: Alarm
     private val refreshTicket = AtomicLong(0)
 
     init {
         Disposer.register(parentDisposable, this)
+        refreshAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
         isOpaque = false
         border = JBUI.Borders.empty(12)
         add(createHeader(), BorderLayout.NORTH)

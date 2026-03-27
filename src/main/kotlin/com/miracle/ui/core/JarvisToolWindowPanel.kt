@@ -12,7 +12,7 @@ import javax.swing.JPanel
 class JarvisToolWindowPanel(
     private val project: Project,
     parentDisposable: Disposable,
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()), Disposable {
     private val contentLayout = CardLayout()
     private val contentContainer = JPanel(contentLayout)
     private val tabbedPane = JarvisToolWindowTabbedPane(project)
@@ -96,6 +96,12 @@ class JarvisToolWindowPanel(
             border = JBUI.Borders.empty()
             add(tabbedPane, BorderLayout.CENTER)
         }
+    }
+
+    override fun dispose() {
+        tabbedPane.dispose()
+        if (project.isDisposed) return
+        project.getService(JarvisToolWindowService::class.java).unbind(this)
     }
 
     companion object {

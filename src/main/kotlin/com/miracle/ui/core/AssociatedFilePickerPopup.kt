@@ -7,16 +7,17 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBFont
+import com.intellij.util.ui.JBUI.Fonts
 import com.intellij.util.ui.JBUI
 import com.miracle.ui.core.ChatTheme.DROPDOWN_BACKGROUND
 import com.miracle.ui.core.ChatTheme.DROPDOWN_BORDER_COLOR
 import com.miracle.ui.core.ChatTheme.DROPDOWN_ROW_BACKGROUND
+import com.miracle.ui.core.ChatTheme.DROPDOWN_ROW_BORDER_COLOR
 import com.miracle.ui.core.ChatTheme.DROPDOWN_ROW_HOVER_BACKGROUND
 import com.miracle.ui.core.ChatTheme.MUTED_FOREGROUND
 import com.miracle.utils.RipgrepFileSearchService
@@ -31,13 +32,12 @@ import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
-import javax.swing.DefaultListCellRenderer
+import javax.swing.BorderFactory
 import javax.swing.DefaultListModel
-import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.KeyStroke
+import javax.swing.ListCellRenderer
 import javax.swing.ListSelectionModel
 import javax.swing.ScrollPaneConstants
 
@@ -66,28 +66,28 @@ internal class AssociatedFilePickerPopup(
         val list = JBList(listModel).apply {
             selectionMode = ListSelectionModel.SINGLE_SELECTION
             visibleRowCount = 8
-            fixedCellHeight = JBUI.scale(42)
-            border = JBUI.Borders.empty(4)
+            fixedCellHeight = JBUI.scale(34)
+            border = JBUI.Borders.empty(2)
             background = DROPDOWN_BACKGROUND
             cellRenderer = FilePickerCellRenderer(project)
         }
         val emptyLabel = JBLabel("输入文件名或路径搜索").apply {
             font = JBFont.small()
             foreground = MUTED_FOREGROUND
-            border = JBUI.Borders.empty(0, 4, 0, 4)
+            border = JBUI.Borders.empty(0, 2, 0, 2)
         }
         val listPane = JBScrollPane(list).apply {
             border = JBUI.Borders.customLine(DROPDOWN_BORDER_COLOR, 1)
-            preferredSize = Dimension(JBUI.scale(420), JBUI.scale(280))
+            preferredSize = Dimension(JBUI.scale(420), JBUI.scale(256))
             horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
             viewport.background = DROPDOWN_BACKGROUND
         }
-        val contentPanel = JPanel(BorderLayout(JBUI.scale(0), JBUI.scale(8))).apply {
+        val contentPanel = JPanel(BorderLayout(JBUI.scale(0), JBUI.scale(6))).apply {
             isOpaque = true
             background = DROPDOWN_BACKGROUND
             border = JBUI.Borders.compound(
                 createRoundedBorder(DROPDOWN_BORDER_COLOR),
-                JBUI.Borders.empty(10),
+                JBUI.Borders.empty(8),
             )
             add(searchField, BorderLayout.NORTH)
             add(listPane, BorderLayout.CENTER)
@@ -185,34 +185,58 @@ internal class AssociatedFilePickerPopup(
 
     private class FilePickerCellRenderer(
         private val project: Project,
-    ) : DefaultListCellRenderer() {
+    ) : JPanel(), ListCellRenderer<FilePickerItem> {
+        private val titleLabel = JBLabel().apply { font = JBFont.label().asBold() }
+        private val statusLabel = JBLabel().apply {
+            font = Fonts.miniFont()
+            foreground = MUTED_FOREGROUND
+        }
+        private val pathLabel = JBLabel().apply {
+            font = Fonts.miniFont()
+            foreground = MUTED_FOREGROUND
+        }
+        private val headerPanel = JPanel(BorderLayout(JBUI.scale(6), 0)).apply {
+            isOpaque = false
+            add(titleLabel, BorderLayout.CENTER)
+            add(statusLabel, BorderLayout.EAST)
+        }
+
+        init {
+            layout = BorderLayout(0, JBUI.scale(1))
+            border = BorderFactory.createCompoundBorder(
+                JBUI.Borders.customLine(DROPDOWN_ROW_BORDER_COLOR, 0, 0, 1, 0),
+                JBUI.Borders.empty(2, 8, 1, 8),
+            )
+            isOpaque = true
+            add(headerPanel, BorderLayout.NORTH)
+            add(pathLabel, BorderLayout.CENTER)
+        }
+
         override fun getListCellRendererComponent(
-            list: JList<*>,
-            value: Any?,
+            list: JList<out FilePickerItem>,
+            value: FilePickerItem?,
             index: Int,
             isSelected: Boolean,
             cellHasFocus: Boolean,
         ): Component {
-            val item = value as? FilePickerItem
-            val component = super.getListCellRendererComponent(list, "", index, isSelected, cellHasFocus)
-            if (component is JLabel && item != null) {
-                val basePath = project.basePath
-                val relativePath = if (basePath.isNullOrBlank()) {
-                    item.file.path
-                } else {
-                    toRelativePath(item.file.path, basePath)
-                }
-                val suffix = if (item.alreadyAssociated) " · 已关联" else ""
-                component.icon = item.file.fileType.icon
-                component.border = JBUI.Borders.empty(4, 8)
-                component.background = if (isSelected) {
-                    DROPDOWN_ROW_HOVER_BACKGROUND
-                } else {
-                    DROPDOWN_ROW_BACKGROUND
-                }
-                component.text = "<html><div><b>${escapeHtml(item.displayName)}</b></div><div style='color:#8A8F98;'>${escapeHtml(relativePath + suffix)}</div></html>"
+            val item = value ?: return this
+
+            val basePath = project.basePath
+            val relativePath = if (basePath.isNullOrBlank()) {
+                item.file.path
+            } else {
+                toRelativePath(item.file.path, basePath)
             }
-            return component
+            val background = if (isSelected) DROPDOWN_ROW_HOVER_BACKGROUND else DROPDOWN_ROW_BACKGROUND
+
+            this.background = background
+            titleLabel.icon = item.file.fileType.icon
+            titleLabel.text = item.displayName
+            titleLabel.foreground = list.foreground
+            statusLabel.text = if (item.alreadyAssociated) "已关联" else ""
+            pathLabel.text = relativePath
+            pathLabel.foreground = MUTED_FOREGROUND
+            return this
         }
     }
 

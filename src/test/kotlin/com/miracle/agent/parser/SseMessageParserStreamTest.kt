@@ -54,7 +54,7 @@ class SseMessageParserStreamTest {
         val segments = simulateStreaming(parser, input, seed = 42)
 
         val segmentTypes = segments.map { it::class.simpleName }
-        assertTrue(segmentTypes.containsAll(listOf("Text", "CodeHeader", "Code", "CodeEnd")))
+        assertTrue(segmentTypes.containsAll(listOf("TextSegment", "CodeHeader", "Code", "CodeEnd")))
         val codeSegments = segments.filterIsInstance<Code>()
         assertTrue(codeSegments.isNotEmpty())
         assertTrue(codeSegments.last().code.contains("println(\"Hello, World!\")"))
@@ -175,7 +175,7 @@ class SseMessageParserStreamTest {
 
         val segmentTypeSet = segments.map { it::class.simpleName }.toSet()
         assertTrue(segmentTypeSet.containsAll(listOf(
-            "Text", "CodeHeader", "SearchWaiting",
+            "TextSegment", "CodeHeader", "SearchWaiting",
             "ReplaceWaiting", "SearchReplace", "Code", "CodeEnd"
         )))
     }

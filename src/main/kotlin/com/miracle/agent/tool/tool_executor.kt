@@ -168,7 +168,7 @@ object ToolExecutor{
             val fields = JsonFieldExtractor.extractFields(partialArguments)
             val toolSegment = tool.handlePartialBlock(id, fields, taskState)
             toolSegment?.let {
-                val autoApprove = shouldAutoApproveTool(id, toolSegment.toolCommand, taskState.project)
+                val autoApprove = shouldAutoApproveTool(toolName, toolSegment.toolCommand, taskState.project)
                 if (autoApprove) {
                     taskState.emit!!(JarvisSay(id, AgentMessageType.TOOL, listOf(toolSegment), true))
                 } else {

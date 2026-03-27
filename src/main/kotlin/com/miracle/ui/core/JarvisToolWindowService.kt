@@ -28,6 +28,12 @@ class JarvisToolWindowService(private val project: Project) {
         }
     }
 
+    fun unbind(panel: JarvisToolWindowPanel) {
+        if (this.panel === panel) {
+            this.panel = null
+        }
+    }
+
     fun showToolWindow(): ToolWindow? {
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(JarvisToolWindowFactory.TOOL_WINDOW_ID)
         toolWindow?.show()

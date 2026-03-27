@@ -10,6 +10,7 @@ import com.intellij.util.ui.JBUI
 import com.miracle.services.ModelConfig
 import com.miracle.services.addCustomModel
 import com.miracle.services.deleteCustomModel
+import com.miracle.services.formatReasoningEffort
 import com.miracle.services.getCustomModels
 import com.miracle.services.getSelectedModelId
 import com.miracle.services.setSelectedModel
@@ -40,10 +41,11 @@ class ManageCustomModelsDialog(
         columnModel.getColumn(1).preferredWidth = JBUI.scale(120)
         columnModel.getColumn(2).preferredWidth = JBUI.scale(250)
         columnModel.getColumn(3).preferredWidth = JBUI.scale(120)
-        columnModel.getColumn(4).preferredWidth = JBUI.scale(80)
-        columnModel.getColumn(5).preferredWidth = JBUI.scale(160)
-        columnModel.getColumn(5).cellRenderer = ButtonPanelRenderer()
-        columnModel.getColumn(5).cellEditor = ButtonPanelEditor(this@ManageCustomModelsDialog)
+        columnModel.getColumn(4).preferredWidth = JBUI.scale(100)
+        columnModel.getColumn(5).preferredWidth = JBUI.scale(80)
+        columnModel.getColumn(6).preferredWidth = JBUI.scale(160)
+        columnModel.getColumn(6).cellRenderer = ButtonPanelRenderer()
+        columnModel.getColumn(6).cellEditor = ButtonPanelEditor(this@ManageCustomModelsDialog)
     }
 
     private val addButton = JButton("添加模型", AllIcons.General.Add).apply {
@@ -93,6 +95,8 @@ class ManageCustomModelsDialog(
                 apiKey = modelInfo.apiKey,
                 contextTokens = modelInfo.contextTokens,
                 alias = modelInfo.alias.takeIf { it.isNotBlank() },
+                apiStyle = modelInfo.apiStyle,
+                reasoningEffort = modelInfo.reasoningEffort,
                 supportsImages = modelInfo.supportsImages
             )
             if (getSelectedModelId() == null) {
@@ -119,6 +123,8 @@ class ManageCustomModelsDialog(
                 apiKey = modelInfo.apiKey,
                 contextTokens = modelInfo.contextTokens,
                 alias = modelInfo.alias.takeIf { it.isNotBlank() },
+                apiStyle = modelInfo.apiStyle,
+                reasoningEffort = modelInfo.reasoningEffort,
                 supportsImages = modelInfo.supportsImages
             )
             if (getSelectedModelId() == model.id) {
@@ -157,7 +163,7 @@ class ManageCustomModelsDialog(
 
     private class CustomModelsTableModel : AbstractTableModel() {
         private val models = mutableListOf<ModelConfig>()
-        private val columnNames = arrayOf("模型名称", "显示名称", "API 地址", "上下文长度", "多模态", "操作")
+        private val columnNames = arrayOf("模型名称", "显示名称", "API 地址", "协议/Reasoning", "上下文长度", "多模态", "操作")
 
         fun loadModels() {
             models.clear()
@@ -174,15 +180,16 @@ class ManageCustomModelsDialog(
             return when (columnIndex) {
                 0 -> model.model
                 1 -> model.alias
-                2 -> model.endpoint
-                3 -> "${model.contextTokens} tokens"
-                4 -> if (model.supportsImages) "✓" else "✗"
-                5 -> model
+                2 -> model.endpoint.ifBlank { "本机 codex login" }
+                3 -> "${model.resolvedApiStyle.desc} / ${formatReasoningEffort(model.resolvedReasoningEffort)}"
+                4 -> "${model.contextTokens} tokens"
+                5 -> if (model.supportsImages) "✓" else "✗"
+                6 -> model
                 else -> ""
             }
         }
 
-        override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean = columnIndex == 5
+        override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean = columnIndex == 6
     }
 
     private class ButtonPanelRenderer : JPanel(), TableCellRenderer {

@@ -1,6 +1,8 @@
 package com.miracle.ui.core
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBFont
@@ -28,7 +30,7 @@ import javax.swing.UIManager
 
 class JarvisToolWindowTabbedPane(
     private val project: Project,
-) : JPanel(BorderLayout()) {
+) : JPanel(BorderLayout()), Disposable {
 
     private val activeTabs = LinkedHashMap<String, TabInfo>()
     private val contentLayout = BorderLayout()
@@ -232,7 +234,7 @@ class JarvisToolWindowTabbedPane(
         val keys = activeTabs.keys.toList()
         val removedIndex = keys.indexOf(tabId)
         val info = activeTabs.remove(tabId) ?: return
-        info.panel.dispose()
+        Disposer.dispose(info.panel)
         rebuildTabsRow()
 
         if (activeTabs.isEmpty()) {
@@ -245,6 +247,14 @@ class JarvisToolWindowTabbedPane(
         selectTab(nextTabId)
         tabsRow.revalidate()
         tabsRow.repaint()
+    }
+
+    override fun dispose() {
+        activeTabs.values.map { it.panel }.forEach(Disposer::dispose)
+        selectedTabId = null
+        activeTabs.clear()
+        contentPanel.removeAll()
+        tabsRow.removeAll()
     }
 
     private fun rebuildTabsRow() {

@@ -10,19 +10,26 @@ import com.miracle.utils.Debug
 import com.miracle.utils.getUserConfigDirectory
 import com.miracle.utils.getCurrentRequest
 import com.miracle.utils.markPhase
-import com.squareup.wire.Duration
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage.systemMessage
-import dev.langchain4j.kotlin.model.chat.chat
+import dev.langchain4j.kotlin.model.chat.request.chatRequest
+import dev.langchain4j.model.chat.ChatModel
+import dev.langchain4j.model.chat.StreamingChatModel
+import dev.langchain4j.model.chat.request.ChatRequest
 import dev.langchain4j.model.chat.response.ChatResponse
+import dev.langchain4j.model.chat.response.StreamingChatResponseHandler
 import dev.langchain4j.model.openai.OpenAiChatModel
+import dev.langchain4j.model.openai.OpenAiResponsesStreamingChatModel
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel
+import kotlinx.coroutines.future.await
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import javax.swing.Icon
 
 private var LOG = Logger.getInstance("com.miracle.services.model")
@@ -43,6 +50,19 @@ enum class ModelProvider(val code: String, val desc: String) {
 }
 
 @Serializable
+enum class ModelApiStyle(val desc: String) {
+    CHAT_COMPLETIONS("Chat Completions"),
+    RESPONSES("Responses"),
+    CODEX_CLI("Codex CLI");
+
+    override fun toString(): String = desc
+}
+
+fun ModelApiStyle.requiresApiCredentials(): Boolean = this != ModelApiStyle.CODEX_CLI
+
+private val REASONING_EFFORTS = setOf("low", "medium", "high", "xhigh")
+
+@Serializable
 data class ModelConfig(
     @kotlinx.serialization.Transient
     val provider: ModelProvider = ModelProvider.OPENAI_COMPATIBLE,   // 模型提供商
@@ -53,6 +73,8 @@ data class ModelConfig(
     val apiKey: String?,    // 模型提供商的token
     val contextTokens: Int, // 上下文最大token数
     val maxOutputTokens: Int? = null,  // 最大输出token
+    val apiStyle: ModelApiStyle = ModelApiStyle.CHAT_COMPLETIONS,  // API 协议类型
+    val reasoningEffort: String? = null,  // reasoning effort，主要给 Codex/Responses 模型使用
     val supportsImages: Boolean = false,  // 是否支持图片
     @kotlinx.serialization.Transient
     var icon: Icon = AllIcons.Nodes.Plugin
@@ -61,6 +83,16 @@ data class ModelConfig(
         get() = "${provider}_${model}"
     val alias: String
         get() = _alias ?: model
+    val isCodexModel: Boolean
+        get() = model.contains("codex", ignoreCase = true) || alias.contains("codex", ignoreCase = true)
+    val resolvedApiStyle: ModelApiStyle
+        get() = when {
+            apiStyle == ModelApiStyle.CODEX_CLI -> ModelApiStyle.CODEX_CLI
+            apiStyle == ModelApiStyle.CHAT_COMPLETIONS && isCodexModel -> ModelApiStyle.RESPONSES
+            else -> apiStyle
+        }
+    val resolvedReasoningEffort: String?
+        get() = normalizeReasoningEffort(reasoningEffort) ?: if (isCodexModel) "medium" else null
 
     companion object {
         fun from(
@@ -70,6 +102,8 @@ data class ModelConfig(
             endpoint: String,
             apiKey: String? = null,
             alias: String? = null,
+            apiStyle: ModelApiStyle = ModelApiStyle.CHAT_COMPLETIONS,
+            reasoningEffort: String? = null,
             supportsImages: Boolean = false,
             icon: Icon = AllIcons.Nodes.Plugin,
             maxOutputTokens: Int? = null,
@@ -81,6 +115,8 @@ data class ModelConfig(
                 endpoint = endpoint,
                 apiKey = apiKey,
                 contextTokens = contextTokens,
+                apiStyle = apiStyle,
+                reasoningEffort = reasoningEffort,
                 supportsImages = supportsImages,
                 icon = icon,
                 maxOutputTokens = maxOutputTokens
@@ -113,56 +149,28 @@ suspend fun chatCompletion(
     markPhase("LLM_CALL")
     val systemMessages: List<ChatMessage> = systemPrompt.filter { it.isNotBlank() }.map { systemMessage(it) }
     val allMessages = systemMessages + messages
-    val model = getChatModel(options.model)
-    return model.chat {
-        this.messages += allMessages
-        parameters {
-            this.toolSpecifications = ToolRegistry.getToolSpecifications(tools)
+    return executeChatRequest(
+        modelId = options.model,
+        request = chatRequest {
+            this.messages += allMessages
+            parameters {
+                this.toolSpecifications = ToolRegistry.getToolSpecifications(tools)
+            }
         }
-    }
+    )
 }
 
-suspend fun getStreamChatModel(modelId: String): OpenAiStreamingChatModel {
-    val modelConfigs = loadModelConfigs()
-    val modelConfig = modelConfigs[modelId] ?: throw IllegalArgumentException("model $modelId not found")
-    val builder = OpenAiStreamingChatModel.builder()
-        .baseUrl(modelConfig.endpoint)
-        .apiKey(modelConfig.apiKey)
-        .modelName(modelConfig.model)
-        .timeout(Duration.ofSeconds(300))
-        .strictTools(true)
-        .strictJsonSchema(true)
-    if (modelConfig.alias == "kimi-k2.5") {
-        builder.customParameters(mapOf(
-            "thinking" to mapOf("type" to "disabled"),  // official API
-            "extra_body" to mapOf("thinking" to mapOf("type" to "disabled")),  // 兼容litellm
-            "chat_template_kwargs" to mapOf("thinking" to false)  // vLLM or SGLang
-        ))
-        builder.temperature(0.6)  // 非思考模式 0.6， 思考模式1.0
-//        builder.returnThinking(true)
-//        builder.sendThinking(true)
-    } else if (modelConfig.alias.startsWith("glm-")) {
-        builder.customParameters(mapOf(
-            "thinking" to mapOf("type" to "disabled"),  // official API
-            "extra_body" to mapOf("thinking" to mapOf("type" to "disabled")),  // 兼容litellm
-            "chat_template_kwargs" to mapOf("thinking" to false)  // vLLM or SGLang
-        ))
-        builder.temperature(0.7)  // 非思考模式 0.7， 思考模式1.0
+suspend fun getStreamChatModel(modelId: String): StreamingChatModel {
+    val modelConfig = getModelConfig(modelId)
+    if (modelConfig.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
+        throw IllegalStateException("Codex CLI 模型不走内部 StreamingChatModel 链路")
     }
-    return builder.build()
+    return buildStreamingChatModel(modelConfig)
 }
 
-suspend fun getChatModel(modelId: String): OpenAiChatModel {
-    val modelConfigs = loadModelConfigs()
-    val modelConfig = modelConfigs[modelId] ?: throw IllegalArgumentException("model $modelId not found")
-    return OpenAiChatModel.builder()
-        .baseUrl(modelConfig.endpoint)
-        .apiKey(modelConfig.apiKey)
-        .modelName(modelConfig.model)
-        .timeout(Duration.ofSeconds(120))
-        .strictTools(true)
-        .strictJsonSchema(true)
-        .build()
+suspend fun getChatModel(modelId: String): ChatModel? {
+    val modelConfig = getModelConfig(modelId)
+    return if (modelConfig.resolvedApiStyle != ModelApiStyle.CHAT_COMPLETIONS) null else buildChatModel(modelConfig)
 }
 
 /**
@@ -186,7 +194,7 @@ private fun loadCustomModelConfigs(): List<ModelConfig> {
         }
         val jsonText = modelFile.readText()
         val models = Json.decodeFromString<List<ModelConfig>>(jsonText)
-        return models.map { it.copy(icon = AllIcons.Nodes.Plugin) }
+        return models.map { normalizeModelConfig(it) }
     }.getOrElse { emptyList() }
 }
 
@@ -205,7 +213,16 @@ fun getCustomModels(): List<ModelConfig> {
     return loadCustomModelConfigs()
 }
 
-fun addCustomModel(model: String, endpoint: String, apiKey: String, contextTokens: Int, alias: String? = null, supportsImages: Boolean = false) {
+fun addCustomModel(
+    model: String,
+    endpoint: String,
+    apiKey: String?,
+    contextTokens: Int,
+    alias: String? = null,
+    apiStyle: ModelApiStyle = ModelApiStyle.CHAT_COMPLETIONS,
+    reasoningEffort: String? = null,
+    supportsImages: Boolean = false,
+) {
     val modelConfigs = loadCustomModelConfigs()
 
     // 检查模型是否已存在
@@ -218,9 +235,11 @@ fun addCustomModel(model: String, endpoint: String, apiKey: String, contextToken
         provider = ModelProvider.OPENAI_COMPATIBLE,
         model = model,
         _alias = alias,
-        endpoint = endpoint,
-        apiKey = apiKey,
+        endpoint = endpoint.trim(),
+        apiKey = apiKey?.trim()?.takeIf { it.isNotBlank() },
         contextTokens = contextTokens,
+        apiStyle = apiStyle,
+        reasoningEffort = normalizeReasoningEffort(reasoningEffort),
         supportsImages = supportsImages
     )
     CUSTOM_MODELS = modelConfigs + modelConfig
@@ -265,7 +284,17 @@ fun getSelectedModel(): ModelConfig? {
 /**
  * 更新自定义模型
  */
-fun updateCustomModel(oldModel: String, newModel: String, endpoint: String, apiKey: String?, contextTokens: Int, alias: String? = null, supportsImages: Boolean = false) {
+fun updateCustomModel(
+    oldModel: String,
+    newModel: String,
+    endpoint: String,
+    apiKey: String?,
+    contextTokens: Int,
+    alias: String? = null,
+    apiStyle: ModelApiStyle = ModelApiStyle.CHAT_COMPLETIONS,
+    reasoningEffort: String? = null,
+    supportsImages: Boolean = false,
+) {
     val modelConfigs = loadCustomModelConfigs()
 
     // 检查旧模型是否存在
@@ -289,9 +318,11 @@ fun updateCustomModel(oldModel: String, newModel: String, endpoint: String, apiK
         provider = ModelProvider.OPENAI_COMPATIBLE,
         model = newModel,
         _alias = alias,
-        endpoint = endpoint,
+        endpoint = endpoint.trim(),
         apiKey = resolvedApiKey,
         contextTokens = contextTokens,
+        apiStyle = apiStyle,
+        reasoningEffort = normalizeReasoningEffort(reasoningEffort),
         supportsImages = supportsImages
     )
     
@@ -302,4 +333,123 @@ fun updateCustomModel(oldModel: String, newModel: String, endpoint: String, apiK
     val jsonText = json.encodeToString(CUSTOM_MODELS)
     val modelFile = File(getUserConfigDirectory(), "models.json")
     modelFile.writeText(jsonText)
+}
+
+fun formatReasoningEffort(reasoningEffort: String?): String {
+    return normalizeReasoningEffort(reasoningEffort) ?: "默认"
+}
+
+private fun normalizeReasoningEffort(reasoningEffort: String?): String? {
+    val normalized = reasoningEffort?.trim()?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
+    return normalized.takeIf { it in REASONING_EFFORTS }
+}
+
+private fun normalizeModelConfig(modelConfig: ModelConfig): ModelConfig {
+    return modelConfig.copy(
+        apiStyle = modelConfig.resolvedApiStyle,
+        reasoningEffort = modelConfig.resolvedReasoningEffort,
+        icon = AllIcons.Nodes.Plugin,
+    )
+}
+
+private suspend fun getModelConfig(modelId: String): ModelConfig {
+    val modelConfigs = loadModelConfigs()
+    return modelConfigs[modelId] ?: throw IllegalArgumentException("model $modelId not found")
+}
+
+suspend fun executeChatRequest(modelId: String, request: ChatRequest): ChatResponse {
+    val modelConfig = getModelConfig(modelId)
+    if (modelConfig.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
+        return CodexCliService.completeChatRequest(modelConfig, request)
+    }
+    val chatModel = buildChatModel(modelConfig)
+    return if (chatModel != null) {
+        chatModel.chat(request)
+    } else {
+        completeChatWithStreamingModel(buildStreamingChatModel(modelConfig), request)
+    }
+}
+
+private fun buildChatModel(modelConfig: ModelConfig): ChatModel? {
+    if (modelConfig.resolvedApiStyle != ModelApiStyle.CHAT_COMPLETIONS) return null
+
+    val builder = OpenAiChatModel.builder()
+        .baseUrl(modelConfig.endpoint)
+        .apiKey(modelConfig.apiKey)
+        .modelName(modelConfig.model)
+        .timeout(Duration.ofSeconds(120))
+        .strictTools(true)
+        .strictJsonSchema(true)
+
+    modelConfig.resolvedReasoningEffort?.let(builder::reasoningEffort)
+    modelConfig.maxOutputTokens?.let(builder::maxCompletionTokens)
+    return builder.build()
+}
+
+private fun buildStreamingChatModel(modelConfig: ModelConfig): StreamingChatModel {
+    if (modelConfig.resolvedApiStyle == ModelApiStyle.RESPONSES) {
+        val builder = OpenAiResponsesStreamingChatModel.builder()
+            .baseUrl(modelConfig.endpoint)
+            .apiKey(modelConfig.apiKey)
+            .modelName(modelConfig.model)
+            .strict(true)
+
+        modelConfig.resolvedReasoningEffort?.let(builder::reasoningEffort)
+        modelConfig.maxOutputTokens?.let(builder::maxOutputTokens)
+        return builder.build()
+    }
+
+    if (modelConfig.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
+        throw IllegalStateException("Codex CLI 模型不走内部流式模型")
+    }
+
+    val builder = OpenAiStreamingChatModel.builder()
+        .baseUrl(modelConfig.endpoint)
+        .apiKey(modelConfig.apiKey)
+        .modelName(modelConfig.model)
+        .timeout(Duration.ofSeconds(300))
+        .strictTools(true)
+        .strictJsonSchema(true)
+
+    modelConfig.resolvedReasoningEffort?.let(builder::reasoningEffort)
+    modelConfig.maxOutputTokens?.let(builder::maxCompletionTokens)
+
+    if (modelConfig.alias == "kimi-k2.5") {
+        builder.customParameters(
+            mapOf(
+                "thinking" to mapOf("type" to "disabled"),  // official API
+                "extra_body" to mapOf("thinking" to mapOf("type" to "disabled")),  // 兼容litellm
+                "chat_template_kwargs" to mapOf("thinking" to false)  // vLLM or SGLang
+            )
+        )
+        builder.temperature(0.6)  // 非思考模式 0.6， 思考模式1.0
+    } else if (modelConfig.alias.startsWith("glm-")) {
+        builder.customParameters(
+            mapOf(
+                "thinking" to mapOf("type" to "disabled"),  // official API
+                "extra_body" to mapOf("thinking" to mapOf("type" to "disabled")),  // 兼容litellm
+                "chat_template_kwargs" to mapOf("thinking" to false)  // vLLM or SGLang
+            )
+        )
+        builder.temperature(0.7)  // 非思考模式 0.7， 思考模式1.0
+    }
+
+    return builder.build()
+}
+
+private suspend fun completeChatWithStreamingModel(model: StreamingChatModel, request: ChatRequest): ChatResponse {
+    val future = CompletableFuture<ChatResponse>()
+    model.chat(
+        request,
+        object : StreamingChatResponseHandler {
+            override fun onCompleteResponse(completeResponse: ChatResponse) {
+                future.complete(completeResponse)
+            }
+
+            override fun onError(error: Throwable) {
+                future.completeExceptionally(error)
+            }
+        }
+    )
+    return future.await()
 }

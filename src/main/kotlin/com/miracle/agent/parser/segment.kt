@@ -51,6 +51,7 @@ enum class UiToolName {
     MCP_TOOL,
     MCP_TOOL_RESPONSE,
     ASK_USER_QUESTION,
+    REQUEST_USER_INPUT,
     EXCEL_READ,
     USER_EDIT,
     USE_SKILL,
@@ -86,6 +87,7 @@ val UI_TOOL_HEADERS = mapOf(
     UiToolName.MCP_TOOL_RESPONSE to ToolHeader("MCP tool response from {{server_name}}/{{tool_name}}:", AllIcons.Nodes.Plugin),
     UiToolName.EXCEL_READ to ToolHeader("{{agent_name}} wants to read this Excel file", AllIcons.FileTypes.XsdFile),
     UiToolName.ASK_USER_QUESTION to ToolHeader("{{agent_name}} has a question for you:", AllIcons.General.BalloonInformation),
+    UiToolName.REQUEST_USER_INPUT to ToolHeader("{{agent_name}} needs your input:", AllIcons.General.BalloonInformation),
     UiToolName.USE_SKILL to ToolHeader("{{agent_name}} wants to use skill {{skill_name}}", AllIcons.Nodes.Artifact),
     UiToolName.ENTER_PLAN_MODE to ToolHeader("{{agent_name}} wants to enter plan mode:", AllIcons.Actions.MenuOpen),
     UiToolName.EXIT_PLAN_MODE to ToolHeader("{{agent_name}} has completed planning:", AllIcons.Actions.MenuOpen),
@@ -103,6 +105,13 @@ data class ToolSegment(
     @Deprecated("老UI调试用的方法，新UI不应调用此方法（新UI是根据Segment渲染，老UI使用markdown渲染）")
     override fun toMd(): String {
         return "${getToolSegmentHeader(this).text}\n```$toolCommand\n$toolContent\n```"
+    }
+}
+
+@Serializable
+data class ProposedPlanSegment(val markdown: String) : Segment(markdown) {
+    override fun toMd(): String {
+        return markdown
     }
 }
 

@@ -5,7 +5,6 @@ import com.miracle.ui.smartconversation.settings.configuration.ChatMode
 import com.miracle.utils.ChatMessageStore
 import com.miracle.utils.TodoItem
 import com.miracle.utils.TodoStorage
-import com.miracle.utils.getPlanDirectory
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.Content
 import dev.langchain4j.data.message.TextContent
@@ -104,14 +103,12 @@ class SystemReminderService(private val convId: String, private val agentId: Str
     private val remindersSent: MutableSet<String> = mutableSetOf()
     private val eventDispatcher: MutableMap<String, MutableList<(Any) -> Unit>> = HashMap()
     var chatMode: ChatMode = ChatMode.AGENT
-    var isEmbeddedPlanMode: Boolean = false  // 是否处于内嵌计划模式
 
     companion object {
         const val TODO_CHANGED_KEY = "todo_changed"
         const val TODO_EMPTY_KEY = "todo_empty"
         const val PROJECT_INSTRUCTIONS_KEY = "project_instructions"
         const val PLAN_MODE_KEY = "plan_mode"
-        const val EMBEDDED_PLAN_MODE_KEY = "embedded_plan_mode"
     }
 
     init {
@@ -209,66 +206,21 @@ class SystemReminderService(private val convId: String, private val agentId: Str
 
     private fun getPlanModeReminder(): List<ReminderMessage>? {
         if (chatMode != ChatMode.PLAN) return null
-        
-        val planDir = getPlanDirectory(project, convId)
-        
-        // 内嵌计划模式的提示（从Agent模式通过EnterPlanMode工具进入）
-        if (isEmbeddedPlanMode && !remindersSent.contains(EMBEDDED_PLAN_MODE_KEY)) {
-            remindersSent.add(EMBEDDED_PLAN_MODE_KEY)
-            val reminder = createReminderMessage(
-                type = "embedded_plan_mode",
-                category = "task",
-                priority = "high",
-                content = """Plan mode is active (entered via EnterPlanMode tool). The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system.
-
-## Plan File Info:
-You should write your plan to $planDir directory using the Write tool. This is the ONLY location you are allowed to write to.
-
-## Plan Workflow
-
-### Phase 1: Initial Understanding
-Goal: Gain a comprehensive understanding of the user's request by reading through code and asking them questions.
-
-1. Focus on understanding the user's request and the code associated with their request
-2. Use read-only tools (Glob, Grep, Read, Task with explore type) to explore the codebase
-3. After exploring the code, use the AskUserQuestion tool to clarify ambiguities in the user request up front
-
-### Phase 2: Design
-Goal: Design an implementation approach based on the user's intent and your exploration results.
-
-### Phase 3: Review
-Goal: Review your plan and ensure alignment with the user's intentions.
-1. Read the critical files identified to deepen your understanding
-2. Ensure that the plan aligns with the user's original request
-3. Use AskUserQuestion to clarify any remaining questions with the user
-
-### Phase 4: Final Plan
-Goal: Write your final plan to the plan file (the only file you can edit).
-- Include only your recommended approach, not all alternatives
-- Ensure that the plan file is concise enough to scan quickly, but detailed enough to execute effectively
-- Include the paths of critical files to be modified
-
-### Phase 5: Call ExitPlanMode
-At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ExitPlanMode to indicate that you are done planning.
-
-NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent.
-""",
-            )
-            return listOf(reminder)
-        }
-        
-        // 独立计划模式的提示（直接从UI选择Plan模式）
         if (!remindersSent.contains(PLAN_MODE_KEY)) {
             remindersSent.add(PLAN_MODE_KEY)
             val reminder = createReminderMessage(
                 type = "plan_mode",
                 category = "task",
                 priority = "high",
-                content = "Plan mode is active. Stay read-only; only use planning tools. If writing a plan, restrict the Write tool to $planDir.",
+                content = """Plan mode is active. Stay read-only and do not execute implementation work.
+
+Use only the read-only planning tools available in this mode. Explore the codebase first, then ask focused follow-up questions only when they materially change the implementation plan.
+
+When the spec is decision-complete, finish by emitting exactly one <proposed_plan>...</proposed_plan> block in the assistant response. Do not write plan files, do not call plan-mode transition tools, and do not output multiple proposed plans in the same turn.""",
             )
             return listOf(reminder)
         }
-        
+
         return null
     }
 

@@ -3,14 +3,12 @@ package com.miracle.agent.tool
 import com.miracle.agent.TaskState
 import com.miracle.agent.parser.ToolSegment
 import com.miracle.agent.parser.UiToolName
-import com.miracle.ui.smartconversation.settings.configuration.ChatMode
 import com.miracle.utils.JsonField
-import com.miracle.utils.getPlanDirectory
 import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import java.io.File
 import kotlin.reflect.KFunction
 
 /**
@@ -61,21 +59,14 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
 
     override fun renderResultForAssistant(output: ExitPlanModeOutput): String {
         return if (output.success) {
-            """User has approved your plan. You can now start coding. Start with updating your todo list if applicable.
-
-Your plan has been saved to: ${output.planFilePath}
-You can refer back to it if needed during implementation.
-
-## Approved Plan:
-${output.planContent}
-"""
+            "ExitPlanMode is deprecated. Emit a <proposed_plan> block in Plan mode instead."
         } else {
             "Error: ${output.errorMessage}"
         }
     }
 
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
-        // plan_file is optional, no required validation needed
+        input as? JsonObject ?: throw ToolParameterException("Invalid input format")
     }
 
     override suspend fun handlePartialBlock(
@@ -87,13 +78,10 @@ ${output.planContent}
         if (isPartial) return null
         
         val planFile = partialArgs["plan_file"]?.value
-        val content = planFile
-            ?.takeIf { it.isNotBlank() }
-            ?.let { File(it).readText() }
         return ToolSegment(
             name = UiToolName.EXIT_PLAN_MODE,
             toolCommand = planFile ?: "Exit Plan Mode",
-            toolContent = content?:"Planning phase completed. Ready to proceed with implementation.",
+            toolContent = "ExitPlanMode is deprecated. Use a <proposed_plan> block in Plan mode instead.",
             params = mutableMapOf<String, JsonElement>().apply {
                 planFile?.let { put("plan_file", JsonPrimitive(it)) }
                 put("agent_name", JsonPrimitive(
@@ -104,84 +92,18 @@ ${output.planContent}
     }
 
     fun execute(taskState: TaskState, planFile: String? = null): ToolCallResult<ExitPlanModeOutput> {
-        val planDir = getPlanDirectory(taskState.project, taskState.convId)
-        
-        // 查找计划文件
-        val planFilePath = if (!planFile.isNullOrBlank()) {
-            planFile
-        } else {
-            findPlanFile(planDir)
-        }
-        
-        if (planFilePath == null) {
-            val output = ExitPlanModeOutput(
-                success = false,
-                planFilePath = null,
-                planContent = null,
-                errorMessage = "No plan file found at $planDir. Please write your plan to this directory before calling ExitPlanMode."
-            )
-            return ToolCallResult(
-                type = "error",
-                data = output,
-                resultForAssistant = renderResultForAssistant(output)
-            )
-        }
-        
-        val planFile = File(planFilePath)
-        if (!planFile.exists()) {
-            val output = ExitPlanModeOutput(
-                success = false,
-                planFilePath = planFilePath,
-                planContent = null,
-                errorMessage = "Plan file not found at $planFilePath. Please write your plan to this file before calling ExitPlanMode."
-            )
-            return ToolCallResult(
-                type = "error",
-                data = output,
-                resultForAssistant = renderResultForAssistant(output)
-            )
-        }
-        
-        val planContent = planFile.readText()
-        
-        // 恢复原始模式
-        if (taskState.isEmbeddedPlanMode) {
-            taskState.chatMode = taskState.originalChatMode ?: ChatMode.AGENT
-            taskState.isEmbeddedPlanMode = false
-            taskState.originalChatMode = null
-            // 同步状态到SystemReminderService
-            taskState.syncPlanModeState()
-            // 刷新工具规范，恢复到原始模式的工具集合
-            taskState.refreshToolSpecs?.invoke()
-        }
-        
         val output = ExitPlanModeOutput(
-            success = true,
-            planFilePath = planFilePath,
-            planContent = planContent,
-            errorMessage = null
+            success = false,
+            planFilePath = planFile,
+            planContent = null,
+            errorMessage = "ExitPlanMode is deprecated. Use a <proposed_plan> block in Plan mode instead."
         )
-        
+
         return ToolCallResult(
-            type = "result",
+            type = "error",
             data = output,
             resultForAssistant = renderResultForAssistant(output)
         )
-    }
-    
-    /**
-     * 在计划目录中查找计划文件
-     * 优先查找 .md 文件，按修改时间倒序排列
-     */
-    private fun findPlanFile(planDir: String): String? {
-        val dir = File(planDir)
-        if (!dir.exists() || !dir.isDirectory) return null
-        
-        val planFiles = dir.listFiles { file ->
-            file.isFile && (file.extension == "md" || file.extension == "txt")
-        }?.sortedByDescending { it.lastModified() }
-        
-        return planFiles?.firstOrNull()?.absolutePath
     }
 }
 

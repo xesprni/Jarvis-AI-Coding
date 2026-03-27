@@ -22,6 +22,10 @@ import kotlin.reflect.KFunction
 
 object TaskTool: Tool<String> {
 
+    override fun getName(): String {
+        return "Task"
+    }
+
     override fun getToolSpecification(): ToolSpecification {
         // 因为有项目级别的 subAgent，这里的描述需要每次动态获取
         return ToolSpecification.builder()

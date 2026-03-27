@@ -28,7 +28,7 @@ class CompleteMessageParser : MessageParser {
      */
     override fun parse(input: String): List<Segment> {
         val normalizedInput = input.replace("\r", "")
-        return parseContentIntoSegments(normalizedInput)
+        return PlanBlockParser.expandSegments(parseContentIntoSegments(normalizedInput))
     }
 
     private fun parseContentIntoSegments(content: String): List<Segment> = buildList {

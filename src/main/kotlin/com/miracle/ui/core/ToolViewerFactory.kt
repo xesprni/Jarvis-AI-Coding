@@ -14,6 +14,7 @@ import com.miracle.ui.core.ChatTheme.MUTED_FOREGROUND
 import com.miracle.ui.core.ChatTheme.PANEL_BACKGROUND
 import com.miracle.ui.core.ChatTheme.PRETTY_JSON
 import com.miracle.ui.core.ChatTheme.TOOL_CONTENT_BACKGROUND
+import com.miracle.agent.tool.RequestUserInputQuestion
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants
@@ -27,7 +28,7 @@ import java.awt.Font
 import java.io.File
 import javax.swing.Box
 import javax.swing.BoxLayout
-import javax.swing.JButton
+import javax.swing.BorderFactory
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -47,6 +48,8 @@ internal class ToolViewerFactory(
     private val renderer: SegmentRendererFactory,
     private val onAskReply: ((String) -> Unit)? = null,
 ) {
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     // ── Tool body dispatcher ─────────────────────────────────────────
 
@@ -75,6 +78,9 @@ internal class ToolViewerFactory(
 
             UiToolName.ASK_USER_QUESTION ->
                 createAskUserQuestionViewer(segment)
+
+            UiToolName.REQUEST_USER_INPUT ->
+                createRequestUserInputViewer(segment)
         }
     }
 
@@ -300,22 +306,117 @@ internal class ToolViewerFactory(
 
     private fun createAskUserQuestionViewer(segment: ToolSegment): JComponent {
         val options = parseQuickOptions(segment)
+        val components = mutableListOf<Component>()
+        if (options.isNotEmpty()) {
+            components += JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
+                isOpaque = false
+                options.forEach { option ->
+                    add(createOptionChipButton(option, "Use this suggested answer") {
+                        onAskReply?.invoke(option)
+                    })
+                }
+            }
+        }
+        return createInteractionViewer(
+            badge = createBadgeLabel(
+                text = "Question",
+                background = ChatTheme.ASK_BADGE_QUESTION_BACKGROUND,
+                foreground = ChatTheme.ASK_BADGE_QUESTION_FOREGROUND,
+                borderColor = ChatTheme.ASK_BADGE_QUESTION_BORDER,
+            ),
+            prompt = segment.toolCommand.ifBlank { segment.toolContent.ifBlank { "Please reply below." } },
+            helper = "Reply in the panel below, or choose a suggested answer here.",
+            extra = components,
+        )
+    }
+
+    private fun createRequestUserInputViewer(segment: ToolSegment): JComponent {
+        val questions = segment.params["questions"]
+            ?.let { json.decodeFromString<List<RequestUserInputQuestion>>(it.toString()) }
+            .orEmpty()
+        val components = mutableListOf<Component>()
+        questions.forEachIndexed { index, question ->
+            if (index > 0) {
+                components += Box.createVerticalStrut(JBUI.scale(8))
+            }
+            components += JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                isOpaque = true
+                background = ChatTheme.PLAN_CARD_SURFACE_BACKGROUND
+                alignmentX = Component.LEFT_ALIGNMENT
+                border = BorderFactory.createCompoundBorder(
+                    createRoundedBorder(ChatTheme.INTERACTION_INPUT_BORDER),
+                    JBUI.Borders.empty(10, 12),
+                )
+                add(JBLabel("<html><b>${question.header}</b></html>").apply {
+                    font = JBFont.label().asBold()
+                    alignmentX = Component.LEFT_ALIGNMENT
+                })
+                add(JBLabel("<html><body>${question.question}</body></html>").apply {
+                    font = JBFont.small()
+                    foreground = MUTED_FOREGROUND
+                    border = JBUI.Borders.emptyTop(4)
+                    alignmentX = Component.LEFT_ALIGNMENT
+                })
+                if (question.options.isNotEmpty()) {
+                    add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0)).apply {
+                        isOpaque = false
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        border = JBUI.Borders.emptyTop(8)
+                        question.options.forEach { option ->
+                            add(
+                                createBadgeLabel(
+                                    text = option.label,
+                                    background = ChatTheme.PLAN_BADGE_BACKGROUND,
+                                    foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
+                                    borderColor = ChatTheme.PLAN_BADGE_BORDER,
+                                ).apply { toolTipText = option.description }
+                            )
+                        }
+                    })
+                }
+            }
+        }
+        return createInteractionViewer(
+            badge = createBadgeLabel(
+                text = "Need Input",
+                background = ChatTheme.ASK_BADGE_REQUEST_BACKGROUND,
+                foreground = ChatTheme.ASK_BADGE_REQUEST_FOREGROUND,
+                borderColor = ChatTheme.ASK_BADGE_REQUEST_BORDER,
+            ),
+            prompt = segment.toolContent.ifBlank { "Waiting for user input..." },
+            helper = "Answer each item in the interaction panel below. Recommended options are shown here for reference.",
+            extra = components,
+        )
+    }
+
+    private fun createInteractionViewer(
+        badge: JComponent,
+        prompt: String,
+        helper: String,
+        extra: List<Component> = emptyList(),
+    ): JComponent {
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = true
-            background = TOOL_CONTENT_BACKGROUND
-            border = JBUI.Borders.empty(8, 12, 8, 12)
-            add(renderer.createMarkdownBlock(segment.toolCommand.ifBlank { segment.toolContent.ifBlank { "Please reply below." } }))
-            if (options.isNotEmpty()) {
+            background = ChatTheme.PLAN_CARD_SURFACE_BACKGROUND
+            border = BorderFactory.createCompoundBorder(
+                createRoundedBorder(ChatTheme.PLAN_CARD_BORDER_COLOR),
+                JBUI.Borders.empty(10, 12),
+            )
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(badge)
+            add(Box.createVerticalStrut(JBUI.scale(8)))
+            add(renderer.createMarkdownBlock(prompt))
+            add(Box.createVerticalStrut(JBUI.scale(8)))
+            add(JBLabel("<html><body>$helper</body></html>").apply {
+                font = JBFont.small()
+                foreground = MUTED_FOREGROUND
+                alignmentX = Component.LEFT_ALIGNMENT
+            })
+            extra.forEach { component ->
                 add(Box.createVerticalStrut(JBUI.scale(8)))
-                add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).apply {
-                    isOpaque = false
-                    options.forEach { option ->
-                        add(JButton(option).apply {
-                            addActionListener { onAskReply?.invoke(option) }
-                        })
-                    }
-                })
+                add(component)
             }
         }
     }

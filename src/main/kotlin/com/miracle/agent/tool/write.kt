@@ -217,11 +217,6 @@ Usage:
 
     private fun ensurePlanWriteAllowed(filePath: String, taskState: TaskState) {
         if (taskState.chatMode != ChatMode.PLAN) return
-        val planDir = getPlanDirectory(taskState.project, taskState.convId)
-        val planDirPath = File(planDir).canonicalFile.toPath().normalize()
-        val targetPath = File(normalizeFilePath(filePath, taskState.project)).canonicalFile.toPath().normalize()
-        if (!targetPath.startsWith(planDirPath)) {
-            throw ToolExecutionException("In Plan mode, writes must be under $planDir")
-        }
+        throw ToolExecutionException("Write is unavailable in Plan mode.")
     }
 }

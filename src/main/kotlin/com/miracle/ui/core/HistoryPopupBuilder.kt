@@ -49,7 +49,7 @@ internal class HistoryPopupBuilder(
             background = DROPDOWN_BACKGROUND
             border = BorderFactory.createCompoundBorder(
                 createRoundedBorder(DROPDOWN_BORDER_COLOR),
-                JBUI.Borders.empty(8),
+                JBUI.Borders.empty(5),
             )
         }
         val popupRef = arrayOfNulls<JBPopup>(1)
@@ -106,7 +106,6 @@ internal class HistoryPopupBuilder(
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
             add(JBLabel("历史会话").apply { font = JBFont.label().asBold() })
-            add(Box.createVerticalStrut(JBUI.scale(2)))
             add(JBLabel("共 ${entries.size} 条").apply {
                 font = JBFont.small(); foreground = MUTED_FOREGROUND
             })
@@ -119,7 +118,7 @@ internal class HistoryPopupBuilder(
             isOpaque = false
             border = BorderFactory.createCompoundBorder(
                 JBUI.Borders.customLine(SPLIT_LINE_COLOR, 0, 0, 1, 0),
-                JBUI.Borders.empty(0, 2, 8, 2),
+                JBUI.Borders.empty(0, 2, 5, 2),
             )
             add(titlePanel, BorderLayout.WEST)
             add(deleteAllButton, BorderLayout.EAST)
@@ -148,14 +147,14 @@ internal class HistoryPopupBuilder(
         }
         entries.forEachIndexed { index, entry ->
             listPanel.add(createRow(entry, openConversation, deleteConversation))
-            if (index != entries.lastIndex) listPanel.add(Box.createVerticalStrut(JBUI.scale(6)))
+            if (index != entries.lastIndex) listPanel.add(Box.createVerticalStrut(JBUI.scale(2)))
         }
         return JBScrollPane(listPanel).apply {
-            isOpaque = false; border = JBUI.Borders.emptyTop(8)
+            isOpaque = false; border = JBUI.Borders.emptyTop(4)
             viewport.isOpaque = false; viewport.background = DROPDOWN_BACKGROUND
             horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             verticalScrollBar.unitIncrement = JBUI.scale(20)
-            preferredSize = Dimension(JBUI.scale(360), JBUI.scale(260))
+            preferredSize = Dimension(JBUI.scale(360), JBUI.scale(236))
         }
     }
 
@@ -173,18 +172,19 @@ internal class HistoryPopupBuilder(
         val deleteButton = createHeaderIconButton(AllIcons.Actions.Close, "删除会话") {
             deleteConversation(entry)
         }
-        val contentPanel = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS); isOpaque = false
-            add(titleLabel); add(Box.createVerticalStrut(JBUI.scale(4))); add(timeLabel)
+        val contentPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+            isOpaque = false
+            add(titleLabel, BorderLayout.CENTER)
+            add(timeLabel, BorderLayout.EAST)
         }
         val rowPanel = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
             isOpaque = true; background = DROPDOWN_ROW_BACKGROUND
             border = BorderFactory.createCompoundBorder(
                 createRoundedBorder(DROPDOWN_ROW_BORDER_COLOR),
-                JBUI.Borders.empty(10),
+                JBUI.Borders.empty(4, 8),
             )
             alignmentX = Component.LEFT_ALIGNMENT
-            maximumSize = Dimension(Int.MAX_VALUE, JBUI.scale(58))
+            maximumSize = Dimension(Int.MAX_VALUE, JBUI.scale(34))
             add(contentPanel, BorderLayout.CENTER)
             add(deleteButton, BorderLayout.EAST)
         }
@@ -231,5 +231,3 @@ internal class HistoryPopupBuilder(
         onDeleted()
     }
 }
-
-
