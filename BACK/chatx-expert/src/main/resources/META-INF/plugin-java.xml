@@ -1,0 +1,55 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- intension action -->
+        <intentionAction>
+            <className>com.qihoo.finance.lowcode.convertor.action.GenerateAllSetterAction</className>
+            <category>JARVIS</category>
+        </intentionAction>
+        <intentionAction>
+            <className>com.qihoo.finance.lowcode.convertor.action.GenerateAllSetterNoDefaultValueAction</className>
+            <category>JARVIS</category>
+        </intentionAction>
+        <intentionAction>
+            <className>com.qihoo.finance.lowcode.convertor.action.GenerateSetterGetterFromFunctionAction</className>
+            <category>JARVIS</category>
+        </intentionAction>
+        <intentionAction>
+            <className>com.qihoo.finance.lowcode.editor.intention.TranslateIntentionAction</className>
+            <category>JARVIS</category>
+        </intentionAction>
+
+        <jvm.exceptionFilter implementation="com.qihoo.finance.lowcode.aiquestion.ui.search.filter.JvmExceptionSearchAIFilter"/>
+    </extensions>
+
+    <actions>
+        <!--<action id="ChatX.methodAskAI" class="com.qihoo.finance.lowcode.common.action.MethodAskAIAction" text="Ask Jarvis"/>-->
+
+        <!--AI question-->
+        <group id="ChatX.ActionGroup.AiQuestion" text="Jarvis • AI软件研发" description="Jarvis • AI软件研发" popup="true">
+            <add-to-group group-id="EditorPopupMenu" relative-to-action="Chatx.editor.addToJarvisChat" anchor="after"/>
+            <action id="ChatX.OpenChatX" class="com.qihoo.finance.lowcode.common.action.OpenChatXAction"
+                    text="打开Jarvis">
+                <keyboard-shortcut first-keystroke="control 1" keymap="$default"/>
+            </action>>
+            <action id="ChatX.GenerateUnitTest" class="com.qihoo.finance.lowcode.common.action.GenerateUnitTestAction"
+                    text="生成单元测试"/>
+            <action id="ChatX.ExplainCode" class="com.qihoo.finance.lowcode.common.action.ExplainCodeAction"
+                    text="解释代码"/>
+            <action id="Chatx.optimizeCode" class="com.qihoo.finance.lowcode.common.action.OptimizeCodeAction"/>
+            <action id="Chatx.commentCode" class="com.qihoo.finance.lowcode.common.action.CommentCodeAction"/>
+            <action id="Chatx.optimizeNaming" class="com.qihoo.finance.lowcode.common.action.OptimizeNamingAction"/>
+            <separator/>
+            <action id="ChatX.GenConvertClass" class="com.qihoo.finance.lowcode.convertor.action.GenConvertClassAction"
+                    text="生成Convert类"/>
+            <action id="ChatX.GenConvertMethod" class="com.qihoo.finance.lowcode.convertor.action.GenConvertMethodAction"
+                    text="生成Convert方法块"/>
+            <action id="ChatX.GenMediator" class="com.qihoo.finance.lowcode.convertor.action.GenMediatorAction"
+                    text="生成Mediator"/>
+        </group>
+    </actions>
+
+</idea-plugin>

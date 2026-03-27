@@ -1,0 +1,29 @@
+{
+    "mcpServers": {
+        "apifox": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@wangmhaha/apifox-mcp-server@latest",
+                "--local"
+            ],
+            "env": {
+                "APIFOX_API_KEY": "APS-MKwmakiNiZWFvBtzPIIQsyx11Bek2MOj",
+                "PROJECT_ID": "7328917"
+            },
+            "disabled": false,
+            "timeout": 10,
+            "space": "Project",
+            "name": "apifox"
+        },
+        "confluence": {
+            "type": "streamableHttp",
+            "url": "http://10.236.162.190/mcp",
+            "disabled": true,
+            "timeout": 60,
+            "space": "Project",
+            "name": "Confluence",
+            "note": "Legacy useJarvisAuth was removed. Add explicit token or headers to re-enable."
+        }
+    }
+}

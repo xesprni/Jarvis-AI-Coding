@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) 2018 David Boissier.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.qihoo.finance.lowcode.console.mongo.view.action.result;
+
+import com.intellij.icons.AllIcons;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.project.DumbAware;
+import com.qihoo.finance.lowcode.console.mongo.view.ui.MongoPanel;
+
+public class NavigateBackwardAction extends AnAction implements DumbAware {
+    private final MongoPanel mongoPanel;
+
+    public NavigateBackwardAction(MongoPanel mongoPanel) {
+        super("Navigate Backward", "Navigate Backward", AllIcons.Actions.Back);
+        this.mongoPanel = mongoPanel;
+    }
+
+    @Override
+    public void actionPerformed(AnActionEvent e) {
+        mongoPanel.navigateBackward();
+    }
+
+    @Override
+    public void update(AnActionEvent event) {
+        event.getPresentation().setVisible(mongoPanel.hasNavigationHistory());
+    }
+}

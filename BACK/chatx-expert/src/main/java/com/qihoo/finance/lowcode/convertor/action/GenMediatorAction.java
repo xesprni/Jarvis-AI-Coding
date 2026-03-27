@@ -1,0 +1,23 @@
+package com.qihoo.finance.lowcode.convertor.action;
+
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.ui.Messages;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiJavaFile;
+import com.qihoo.finance.lowcode.convertor.dialog.GenMediatorDiaglog;
+import org.jetbrains.annotations.NotNull;
+
+public class GenMediatorAction extends AnAction {
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
+        if (!(psiFile instanceof PsiJavaFile) || e.getProject() == null) {
+            Messages.showMessageDialog("请在一个Java文件中操作", "提示", Messages.getInformationIcon());
+            return;
+        }
+        new GenMediatorDiaglog(e.getProject(), (PsiJavaFile) psiFile).show();
+    }
+}

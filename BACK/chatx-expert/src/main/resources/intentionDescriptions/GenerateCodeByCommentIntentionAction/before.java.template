@@ -1,0 +1,3 @@
+public User convert(UserAddDto userAddDto) {
+    // 将userAddDto转换为User
+}

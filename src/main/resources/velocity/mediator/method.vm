@@ -1,0 +1,21 @@
+#foreach ($m in $methods)
+    /**
+    * @Description $!{methodDesc}
+    * @author $!{author}
+    * @date $!{tool.getDateTimeStr()}
+    */
+    public ${m.getMethodRet()} ${m.getMethodName()}($!{m.getParamDefine()}) {
+#if (${m.isExtractDataField()})
+        ${m.getCallRetType()} ${m.getCallRetVar()} = ${m.getInterfaceVar()}.${m.getMethodName()}($!{m.getCallParam()});
+#if ($m.getCheckResultMethod() && !$m.getCheckResultMethod().isBlank())
+        if (!${m.getCallRetVar()}.${m.getCheckResultMethod()}()) {
+            log.error("调用方法${m.getMethodName()}($!{m.getCallParam()})返回值校验失败，返回值：{}", ${m.getCallRetVar()});
+            ${m.getThrowStatement()};
+        }
+#end
+        return ${m.getCallRetVar()}.getData();
+#else
+        $!{m.getReturnStr()} ${m.getInterfaceVar()}.${m.getMethodName()}($!{m.getCallParam()});
+#end
+    }
+#end

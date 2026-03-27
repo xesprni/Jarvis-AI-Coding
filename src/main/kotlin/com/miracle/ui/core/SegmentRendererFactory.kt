@@ -1,0 +1,321 @@
+package com.miracle.ui.core
+
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.project.Project
+import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.JBTextArea
+import com.intellij.util.ui.JBFont
+import com.intellij.util.ui.JBUI
+import com.miracle.agent.parser.Code
+import com.miracle.agent.parser.ErrorSegment
+import com.miracle.agent.parser.SearchReplace
+import com.miracle.agent.parser.Segment
+import com.miracle.agent.parser.TextSegment
+import com.miracle.agent.parser.ToolSegment
+import com.miracle.agent.parser.getToolSegmentHeader
+import com.miracle.ui.core.ChatTheme.PANEL_BACKGROUND
+import com.miracle.ui.core.ChatTheme.ROUNDED_BORDER_COLOR
+import com.miracle.ui.core.ChatTheme.TOOL_CONTENT_BACKGROUND
+import com.miracle.ui.core.ChatTheme.TOOL_TITLE_FOREGROUND
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea
+import org.fife.ui.rtextarea.RTextScrollPane
+import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.Component
+import java.awt.Cursor
+import java.awt.Dimension
+import java.awt.Font
+import javax.swing.BorderFactory
+import javax.swing.Box
+import javax.swing.BoxLayout
+import javax.swing.JComponent
+import javax.swing.JLabel
+import javax.swing.JPanel
+import javax.swing.JScrollPane
+import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
+
+/**
+ * Factory that converts [Segment] model objects into Swing [JComponent]s.
+ *
+ * Core rendering logic (markdown, syntax, collapsible containers) lives here.
+ * Tool-specific viewers are delegated to [ToolViewerFactory].
+ *
+ * @param project    for resolving file paths and opening editors
+ * @param scrollManager for viewport-width wrapping and nested scroll bridging
+ * @param onAskReply optional callback for ask-user-question quick-option buttons
+ */
+internal class SegmentRendererFactory(
+    private val project: Project,
+    private val scrollManager: ChatScrollManager,
+    private val onAskReply: ((String) -> Unit)? = null,
+) {
+
+    private val toolViewers = ToolViewerFactory(project, scrollManager, this, onAskReply)
+
+    // ── Top-level dispatchers ────────────────────────────────────────
+
+    fun renderSegment(segment: Segment): JComponent {
+        val content = when (segment) {
+            is TextSegment -> createMarkdownBlock(segment.text)
+            is ErrorSegment -> createMarkdownBlock(segment.text, error = true)
+            is Code -> createCodeBlock(segment)
+            is SearchReplace -> createSearchReplaceBlock(segment)
+            is ToolSegment -> createToolBlock(segment)
+            else -> createMarkdownBlock(segment.content)
+        }
+        return scrollManager.wrapForConversationWidth(content)
+    }
+
+    fun renderSegmentsAsText(segments: List<Segment>): String {
+        return segments.joinToString("\n\n") { segment ->
+            when (segment) {
+                is TextSegment -> segment.text
+                is ErrorSegment -> segment.text
+                is Code -> segment.code
+                is SearchReplace -> "SEARCH\n${segment.search}\n\nREPLACE\n${segment.replace}"
+                is ToolSegment -> listOf(segment.toolCommand, segment.toolContent)
+                    .filter { it.isNotBlank() }.joinToString("\n\n")
+                else -> segment.content
+            }
+        }
+    }
+
+    // ── Message shell ────────────────────────────────────────────────
+
+    fun createMessageShell(author: String, icon: javax.swing.Icon, alignRight: Boolean): MessageShell {
+        val header = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            if (alignRight) add(Box.createHorizontalGlue())
+            add(JBLabel(author, icon, SwingConstants.LEFT).apply {
+                font = JBFont.label().asBold()
+                foreground = if (alignRight) ChatTheme.USER_FOREGROUND else JBColor.foreground()
+            })
+            add(Box.createHorizontalStrut(JBUI.scale(8)))
+        }
+        val body = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            border = JBUI.Borders.emptyTop(6)
+        }
+        val content = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            add(header, BorderLayout.NORTH)
+            add(body, BorderLayout.CENTER)
+        }
+        val wrapper = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            border = JBUI.Borders.emptyBottom(14)
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(content, if (alignRight) BorderLayout.EAST else BorderLayout.CENTER)
+        }
+        return MessageShell(wrapper, body, header)
+    }
+
+    // ── Text / Markdown ──────────────────────────────────────────────
+
+    fun createTextBlock(text: String, background: Color, foreground: Color, font: Font): JComponent {
+        return JBTextArea(text).apply {
+            lineWrap = true
+            wrapStyleWord = true
+            isEditable = false
+            border = JBUI.Borders.empty(12)
+            isOpaque = true
+            this.background = background
+            this.foreground = foreground
+            this.font = font
+            maximumSize = Dimension(JBUI.scale(920), Int.MAX_VALUE)
+            alignmentX = Component.LEFT_ALIGNMENT
+        }
+    }
+
+    fun createMarkdownBlock(markdown: String, error: Boolean = false): JComponent {
+        val html = if (error) {
+            JarvisMarkdownRenderUtil.convertMarkdownToErrorHtml(markdown)
+        } else {
+            JarvisMarkdownRenderUtil.convertMarkdownToHtml(markdown)
+        }
+        val pane = JarvisMarkdownRenderUtil.createHtmlPane(html, false).apply {
+            border = JBUI.Borders.empty(2, 0)
+            alignmentX = Component.LEFT_ALIGNMENT
+        }
+        return if (html.contains("<table")) {
+            JBScrollPane(pane).apply {
+                border = JBUI.Borders.empty()
+                isOpaque = false
+                viewport.isOpaque = false
+                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED
+                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_NEVER
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height + JBUI.scale(16))
+                scrollManager.installNestedScrollBridge(this, alwaysDelegateVerticalWheel = true)
+            }
+        } else {
+            pane
+        }
+    }
+
+    // ── Syntax viewer ────────────────────────────────────────────────
+
+    fun createSyntaxViewer(content: String, filePath: String, preferredHeight: Int = 200): JComponent {
+        val textArea = RSyntaxTextArea(content).apply {
+            isEditable = false
+            syntaxEditingStyle = toolViewers.detectSyntax(filePath)
+            antiAliasingEnabled = true
+            font = Font(Font.MONOSPACED, Font.PLAIN, JBUI.scale(12))
+            background = TOOL_CONTENT_BACKGROUND
+            currentLineHighlightColor = JBColor(Color(232, 242, 254), Color(50, 50, 50))
+            foreground = JBColor(Color(0, 0, 0), Color(220, 220, 220))
+            selectionColor = JBColor(Color(173, 214, 255), Color(90, 110, 130))
+            caretColor = JBColor(Color.BLACK, Color.WHITE)
+            border = null
+            lineWrap = false
+        }
+        return JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = TOOL_CONTENT_BACKGROUND
+            border = JBUI.Borders.empty(4, 8)
+            add(RTextScrollPane(textArea).apply {
+                border = null
+                viewport.background = TOOL_CONTENT_BACKGROUND
+                lineNumbersEnabled = true
+                gutter.background = TOOL_CONTENT_BACKGROUND
+                gutter.lineNumberColor = JBColor(Color(128, 128, 128), Color(128, 128, 128))
+                gutter.borderColor = JBColor(Color(230, 230, 230), Color(60, 60, 60))
+                preferredSize = Dimension(JBUI.scale(640), JBUI.scale(preferredHeight))
+                minimumSize = Dimension(0, JBUI.scale(100))
+                scrollManager.installNestedScrollBridge(this)
+            }, BorderLayout.CENTER)
+        }
+    }
+
+    // ── Collapsible container ────────────────────────────────────────
+
+    fun createInnerToolContainer(title: String, body: JComponent): JComponent {
+        val bodyWrapper = JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = TOOL_CONTENT_BACKGROUND
+            add(body, BorderLayout.CENTER)
+            isVisible = false
+        }
+        val chevronLabel = JLabel(AllIcons.General.ArrowRight).apply {
+            border = JBUI.Borders.emptyRight(4)
+        }
+        val safeTitle = escapeHtml(title.ifBlank { "tool-result" })
+        val titleLabel = JBLabel(safeTitle).apply {
+            font = Font(Font.MONOSPACED, Font.PLAIN, JBUI.scale(11))
+            foreground = TOOL_TITLE_FOREGROUND
+        }
+        val titleBar = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            add(chevronLabel, BorderLayout.WEST)
+            add(titleLabel, BorderLayout.CENTER)
+            addMouseListener(object : java.awt.event.MouseAdapter() {
+                override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                    bodyWrapper.isVisible = !bodyWrapper.isVisible
+                    chevronLabel.icon = if (bodyWrapper.isVisible)
+                        AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+                    val root = SwingUtilities.getAncestorOfClass(JPanel::class.java, e.component)
+                    root?.revalidate()
+                    root?.repaint()
+                }
+            })
+        }
+        return JPanel(BorderLayout()).apply {
+            isOpaque = true
+            background = PANEL_BACKGROUND
+            border = BorderFactory.createCompoundBorder(
+                createRoundedBorder(ROUNDED_BORDER_COLOR),
+                JBUI.Borders.empty(8, 10, 8, 10),
+            )
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(titleBar, BorderLayout.NORTH)
+            add(bodyWrapper, BorderLayout.CENTER)
+        }
+    }
+
+    // ── Code block ───────────────────────────────────────────────────
+
+    private fun createCodeBlock(segment: Code): JComponent {
+        val titleText = buildString {
+            append(segment.codeLanguage.ifBlank { "code" })
+            segment.codeFilePath?.takeIf { it.isNotBlank() }?.let {
+                append(" \u00B7 ")
+                append(displayPath(it))
+            }
+        }
+        return createInnerToolContainer(
+            title = titleText,
+            body = createSyntaxViewer(segment.code, segment.codeFilePath ?: segment.codeLanguage, preferredHeight = 220),
+        )
+    }
+
+    // ── Tool block ───────────────────────────────────────────────────
+
+    private fun createToolBlock(segment: ToolSegment): JComponent {
+        val header = getToolSegmentHeader(segment)
+        return JPanel(BorderLayout()).apply {
+            isOpaque = false
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(toolViewers.createToolTipsHeader(header), BorderLayout.NORTH)
+            add(
+                createInnerToolContainer(
+                    title = toolViewers.resolveToolTitle(segment),
+                    body = toolViewers.createToolBody(segment),
+                ),
+                BorderLayout.CENTER,
+            )
+        }
+    }
+
+    // ── Search/Replace block ─────────────────────────────────────────
+
+    private fun createSearchReplaceBlock(segment: SearchReplace): JComponent {
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(toolViewers.createSmallSectionLabel("SEARCH", AllIcons.Actions.Find))
+            add(
+                createInnerToolContainer(
+                    title = buildString {
+                        append("search")
+                        segment.codeFilePath?.takeIf { it.isNotBlank() }?.let {
+                            append(" \u00B7 "); append(displayPath(it))
+                        }
+                    },
+                    body = createSyntaxViewer(segment.search, segment.codeFilePath ?: segment.codeLanguage, preferredHeight = 160),
+                ),
+            )
+            add(Box.createVerticalStrut(JBUI.scale(8)))
+            add(toolViewers.createSmallSectionLabel("REPLACE", AllIcons.Actions.MenuOpen))
+            add(
+                createInnerToolContainer(
+                    title = buildString {
+                        append("replace")
+                        segment.codeFilePath?.takeIf { it.isNotBlank() }?.let {
+                            append(" \u00B7 "); append(displayPath(it))
+                        }
+                    },
+                    body = createSyntaxViewer(segment.replace, segment.codeFilePath ?: segment.codeLanguage, preferredHeight = 160),
+                ),
+            )
+        }
+    }
+
+    // ── Path utility ─────────────────────────────────────────────────
+
+    fun displayPath(path: String): String {
+        val basePath = project.basePath ?: return path
+        val normalizedBase = basePath.removeSuffix("/")
+        return if (path.startsWith(normalizedBase)) {
+            path.removePrefix(normalizedBase).removePrefix("/").ifBlank { path }
+        } else {
+            path
+        }
+    }
+}

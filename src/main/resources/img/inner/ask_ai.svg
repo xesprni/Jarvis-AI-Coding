@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="19.7837838px" height="19.7837838px" viewBox="0 0 19.7837838 19.7837838" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>chat-X-数据</title>
+    <defs>
+        <linearGradient x1="100%" y1="0%" x2="0%" y2="100%" id="linearGradient-1">
+            <stop stop-color="#AFB1B3" offset="0%"></stop>
+            <stop stop-color="#AFB1B3" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="100%" y1="0%" x2="0%" y2="100%" id="linearGradient-2">
+            <stop stop-color="#AFB1B3" offset="0%"></stop>
+            <stop stop-color="#AFB1B3" offset="100%"></stop>
+        </linearGradient>
+        <path d="M9.89188285,19.7837838 L0.899513879,19.7837838 C0.565456202,19.7837838 0.259219102,19.5989418 0.103466028,19.303026 C-0.0520871231,19.007606 -0.0309828605,18.6502873 0.158264133,18.375233 L1.94615768,15.7739561 C0.68685508,14.0756017 0,12.0122003 0,9.89189189 C0,4.43747239 4.43757458,0 9.89188285,0 C15.3461911,0 19.7837838,4.43747239 19.7837838,9.89189189 C19.7837838,15.3463114 15.3464019,19.7837838 9.89188285,19.7837838 Z M1.63783211,18.524877 L9.89188285,18.524877 C14.6518429,18.524877 18.5246919,14.651949 18.5246919,9.89189189 C18.5246919,5.13183474 14.6518429,1.25890675 9.89188285,1.25890675 C5.13192277,1.25890675 1.25907375,5.13183474 1.25907375,9.89189189 C1.25907375,11.7746908 1.88021978,13.6067829 3.01784935,15.1040288 C3.0990781,15.2109348 3.16566003,15.3139472 3.2212856,15.4229831 C3.35442177,15.6839533 3.35442177,16.0263478 3.15120392,16.3240463 C3.01572536,16.522512 2.51126809,17.2561223 1.63783211,18.524877 Z" id="path-3"></path>
+        <linearGradient x1="100%" y1="13.4500415%" x2="0%" y2="86.5499585%" id="linearGradient-4">
+            <stop stop-color="#AFB1B3" offset="0%"></stop>
+            <stop stop-color="#AFB1B3" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="100%" y1="13.4500415%" x2="0%" y2="86.5499585%" id="linearGradient-5">
+            <stop stop-color="#AFB1B3" offset="0%"></stop>
+            <stop stop-color="#AFB1B3" offset="100%"></stop>
+        </linearGradient>
+        <path d="M10.1362162,0 L11.4508108,9.79027027 L8.47567568,9.79027027 L8.12972973,7.12648649 L3.97837838,7.12648649 L2.81945946,9.79027027 L0,9.79027027 L3.8227027,0.484324324 L3.32108108,0 L10.1362162,0 Z M6.31351351,1.66054054 L4.65297297,5.46594595 L7.97405405,5.46594595 L7.47243243,1.66054054 L6.31351351,1.66054054 Z" id="path-6"></path>
+    </defs>
+    <g id="控件" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="编组-5" transform="translate(-0.108108, -4.108108)" fill-rule="nonzero">
+            <g id="chat-X-数据" transform="translate(0.108108, 4.108108)">
+                <g id="编组" transform="translate(-0.000000, -0.000000)">
+                    <g id="形状">
+                        <use fill="url(#linearGradient-1)" xlink:href="#path-3"></use>
+                        <use fill="url(#linearGradient-2)" xlink:href="#path-3"></use>
+                    </g>
+                    <g id="形状" transform="translate(4.203243, 4.631351)">
+                        <use fill="url(#linearGradient-4)" xlink:href="#path-6"></use>
+                        <use fill="url(#linearGradient-5)" xlink:href="#path-6"></use>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

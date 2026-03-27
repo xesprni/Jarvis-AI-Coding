@@ -1,0 +1,128 @@
+package com.qihoo.finance.lowcode.aiquestion.ui.search.renderer
+
+import com.intellij.ide.ui.AntialiasingType
+import com.intellij.ide.ui.UISettings
+import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.ex.EditorSettingsExternalizable
+import com.intellij.openapi.editor.ex.util.EditorUtil
+import com.intellij.openapi.editor.impl.EditorImpl
+import com.intellij.openapi.editor.impl.FontInfo
+import com.intellij.util.concurrency.annotations.RequiresEdt
+import com.intellij.util.ui.StartupUiUtil
+import com.intellij.util.ui.UIUtil
+import java.awt.Font
+import java.awt.FontMetrics
+import java.awt.font.FontRenderContext
+import javax.swing.JComponent
+import kotlin.math.ceil
+import kotlin.math.max
+
+/**
+ * SearchInlayTextMetricsStorage
+ *
+ * @author fengjinfu-jk
+ * date 2024/8/12
+ * @version 1.0.0
+ * @apiNote SearchInlayTextMetricsStorage
+ */
+class SearchInlayTextMetricsStorage(val editor: EditorImpl) {
+    private var smallTextMetrics: InlayTextMetrics? = null
+    private var normalTextMetrics: InlayTextMetrics? = null
+
+    val smallTextSize: Float
+        @RequiresEdt
+        get() = max(1f, editor.colorsScheme.editorFontSize2D - 1f)
+
+
+    val normalTextSize: Float
+        @RequiresEdt
+        get() = editor.colorsScheme.editorFontSize2D
+
+    @RequiresEdt
+    fun getFontMetrics(small: Boolean): InlayTextMetrics {
+        var metrics: InlayTextMetrics?
+
+        val familyName = if (EditorSettingsExternalizable.getInstance().isUseEditorFontInInlays) {
+            EditorColorsManager.getInstance().globalScheme.editorFontName
+        } else {
+            // StartupUiUtil.getLabelFont().family
+            StartupUiUtil.labelFont.family
+        }
+        val fontType = editor.colorsScheme.getAttributes(DefaultLanguageHighlighterColors.INLAY_DEFAULT).fontType
+
+        if (small) {
+            metrics = smallTextMetrics
+            val fontSize = smallTextSize
+            if (metrics == null || !metrics.isActual(smallTextSize, familyName)) {
+                metrics = InlayTextMetrics.create(editor, fontSize, fontType)
+                smallTextMetrics = metrics
+            }
+        } else {
+            metrics = normalTextMetrics
+            val fontSize = normalTextSize
+            if (metrics == null || !metrics.isActual(normalTextSize, familyName)) {
+                metrics = InlayTextMetrics.create(editor, fontSize, fontType)
+                normalTextMetrics = metrics
+            }
+        }
+        return metrics
+    }
+}
+
+class InlayTextMetrics(
+    editor: EditorImpl,
+    val fontHeight: Int,
+    val fontBaseline: Int,
+    private val fontMetrics: FontMetrics,
+    val fontType: Int
+) {
+    companion object {
+        internal fun create(editor: EditorImpl, size: Float, fontType: Int): InlayTextMetrics {
+            val font = if (EditorSettingsExternalizable.getInstance().isUseEditorFontInInlays) {
+                val editorFont = EditorUtil.getEditorFont()
+                editorFont.deriveFont(fontType, size)
+            } else {
+                // val familyName = StartupUiUtil.getLabelFont().family
+                val familyName = StartupUiUtil.labelFont.family
+                UIUtil.getFontWithFallback(familyName, fontType, size.toInt())
+            }
+            val context = getCurrentContext(editor.component)
+            val metrics = FontInfo.getFontMetrics(font, context)
+            // We assume this will be a better approximation to a real line height for a given font
+            val fontHeight = ceil(font.createGlyphVector(context, "Albpq@").visualBounds.height).toInt()
+            val fontBaseline = ceil(font.createGlyphVector(context, "Alb").visualBounds.height).toInt()
+            return InlayTextMetrics(editor, fontHeight, fontBaseline, metrics, fontType)
+        }
+
+        private fun getCurrentContext(editorComponent: JComponent): FontRenderContext {
+            val editorContext = FontInfo.getFontRenderContext(editorComponent)
+            return FontRenderContext(
+                editorContext.transform,
+                AntialiasingType.getKeyForCurrentScope(false),
+                UISettings.editorFractionalMetricsHint
+            )
+        }
+    }
+
+    val font: Font
+        get() = fontMetrics.font
+
+    // Editor metrics:
+    val ascent: Int = editor.ascent
+    val descent: Int = editor.descent
+    private val lineHeight = editor.lineHeight
+    private val editorComponent = editor.component
+
+    fun isActual(size: Float, familyName: String): Boolean {
+        if (size != font.size2D) return false
+        if (font.family != familyName) return false
+        return getCurrentContext(editorComponent).equals(fontMetrics.fontRenderContext)
+    }
+
+    fun offsetFromTop(): Int = (lineHeight - fontHeight) / 2
+
+    fun getStringWidth(text: String): Int {
+        return fontMetrics.stringWidth(text)
+    }
+}

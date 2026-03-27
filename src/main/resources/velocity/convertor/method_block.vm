@@ -1,0 +1,10 @@
+#set($retVariable = $tool.getVariableName($returnClass))
+#set($retSimpleName = $tool.getSimpleName($returnClass))
+    $!{copyright}
+    private static $!{retSimpleName} $!{methodName}($!{paramStr}) {
+        $!{retSimpleName} $!{retVariable} = new $!{retSimpleName}();
+#foreach (${setter} in $!{setterList})
+        ${setter}
+#end
+        return $!{retVariable};
+    }
