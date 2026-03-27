@@ -1,5 +1,6 @@
 package com.miracle.ui.core
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
@@ -16,6 +17,10 @@ import com.miracle.ui.settings.skills.SkillsPanel
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Cursor
+import java.awt.Dimension
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.RenderingHints
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
 import javax.swing.JButton
@@ -105,7 +110,7 @@ class JarvisSettingsOverlayPanel(
                 JBUI.Borders.empty(12, 14),
             )
             add(titlePanel, BorderLayout.WEST)
-            add(createFlatButton("返回聊天") { onBack() }, BorderLayout.EAST)
+            add(createBackButton { onBack() }, BorderLayout.EAST)
         }
     }
 
@@ -125,17 +130,52 @@ class JarvisSettingsOverlayPanel(
         }
     }
 
-    private fun createFlatButton(text: String, action: () -> Unit): JButton {
-        return JButton(text).apply {
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-            isFocusPainted = false
-            isOpaque = true
-            background = PANEL_BACKGROUND
-            border = JBUI.Borders.compound(
-                JBUI.Borders.customLine(BORDER_COLOR, 1),
-                JBUI.Borders.empty(6, 10),
-            )
-            addActionListener { action() }
+    private fun createBackButton(action: () -> Unit): JButton {
+        return object : JButton("返回", AllIcons.Actions.Back) {
+            init {
+                cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                isFocusPainted = false
+                isFocusable = false
+                isOpaque = false
+                isContentAreaFilled = false
+                isBorderPainted = false
+                isRolloverEnabled = true
+                font = JBFont.small()
+                foreground = BUTTON_FOREGROUND
+                iconTextGap = JBUI.scale(3)
+                border = JBUI.Borders.empty(0, 9)
+                preferredSize = Dimension(JBUI.scale(68), JBUI.scale(24))
+                minimumSize = preferredSize
+                maximumSize = preferredSize
+                toolTipText = "返回聊天"
+                addActionListener { action() }
+            }
+
+            override fun paintComponent(g: Graphics) {
+                val g2 = g.create() as Graphics2D
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+
+                val arc = JBUI.scale(18)
+                g2.color = when {
+                    model.isPressed -> BUTTON_PRESSED_BACKGROUND
+                    model.isRollover -> BUTTON_HOVER_BACKGROUND
+                    else -> BUTTON_BACKGROUND
+                }
+                g2.fillRoundRect(0, 0, width - 1, height - 1, arc, arc)
+
+                if (model.isRollover || model.isPressed) {
+                    g2.color = if (model.isPressed) BUTTON_PRESSED_BORDER else BUTTON_HOVER_BORDER
+                    g2.drawRoundRect(0, 0, width - 1, height - 1, arc, arc)
+                }
+                g2.dispose()
+
+                foreground = when {
+                    model.isPressed -> BUTTON_FOREGROUND
+                    model.isRollover -> BUTTON_FOREGROUND
+                    else -> BUTTON_MUTED_FOREGROUND
+                }
+                super.paintComponent(g)
+            }
         }
     }
 
@@ -144,5 +184,12 @@ class JarvisSettingsOverlayPanel(
         private val BORDER_COLOR = JBColor(Color(230, 238, 240), Color(30, 31, 34))
         private val MUTED_FOREGROUND = JBColor(Color(0x6B, 0x75, 0x86), Color(0xA0, 0xA8, 0xB8))
         private val ICON_BACKGROUND = JBColor(Color(252, 253, 255), Color(52, 54, 58))
+        private val BUTTON_BACKGROUND = JBColor(Color(244, 247, 250), Color(49, 52, 57))
+        private val BUTTON_HOVER_BACKGROUND = JBColor(Color(237, 242, 247), Color(56, 61, 67))
+        private val BUTTON_PRESSED_BACKGROUND = JBColor(Color(230, 236, 243), Color(63, 68, 75))
+        private val BUTTON_HOVER_BORDER = JBColor(Color(208, 219, 229), Color(88, 95, 105))
+        private val BUTTON_PRESSED_BORDER = JBColor(Color(191, 205, 219), Color(104, 112, 123))
+        private val BUTTON_FOREGROUND = JBColor(Color(0x1F, 0x29, 0x37), Color(0xE6, 0xE9, 0xEE))
+        private val BUTTON_MUTED_FOREGROUND = JBColor(Color(0x5B, 0x67, 0x76), Color(0xB8, 0xC0, 0xCC))
     }
 }

@@ -40,9 +40,9 @@ internal object ChatPromptPanel {
             layout = BoxLayout(this, BoxLayout.X_AXIS)
             isOpaque = false
             add(modelComboBox)
-            add(Box.createHorizontalStrut(JBUI.scale(4)))
+            add(Box.createHorizontalStrut(JBUI.scale(3)))
             add(createToolbarSeparator())
-            add(Box.createHorizontalStrut(JBUI.scale(4)))
+            add(Box.createHorizontalStrut(JBUI.scale(3)))
             add(chatModeComboBox)
         }
 
@@ -50,9 +50,9 @@ internal object ChatPromptPanel {
             layout = BoxLayout(this, BoxLayout.X_AXIS)
             isOpaque = false
             add(sendButton)
-            add(Box.createHorizontalStrut(JBUI.scale(4)))
+            add(Box.createHorizontalStrut(JBUI.scale(3)))
             add(stopButton)
-            val buttonWidth = sendButton.preferredSize.width + stopButton.preferredSize.width + JBUI.scale(8)
+            val buttonWidth = sendButton.preferredSize.width + stopButton.preferredSize.width + JBUI.scale(6)
             val buttonHeight = maxOf(sendButton.preferredSize.height, stopButton.preferredSize.height)
             minimumSize = Dimension(buttonWidth, buttonHeight)
             preferredSize = Dimension(buttonWidth, buttonHeight)
@@ -62,7 +62,7 @@ internal object ChatPromptPanel {
             isOpaque = false
             border = BorderFactory.createCompoundBorder(
                 JBUI.Borders.customLine(SPLIT_LINE_COLOR, 1, 0, 0, 0),
-                JBUI.Borders.empty(8, 12, 10, 12),
+                JBUI.Borders.empty(6, 10, 8, 10),
             )
             add(leftToolbarPanel, BorderLayout.CENTER)
             add(rightButtonPanel, BorderLayout.EAST)
@@ -73,7 +73,7 @@ internal object ChatPromptPanel {
             background = PANEL_BACKGROUND
             border = BorderFactory.createCompoundBorder(
                 JBUI.Borders.customLine(SPLIT_LINE_COLOR, 1, 0, 0, 0),
-                JBUI.Borders.empty(8, 14, 14, 14),
+                JBUI.Borders.empty(6, 10, 10, 10),
             )
             add(askPanel, BorderLayout.NORTH)
             add(JPanel(BorderLayout()).apply {

@@ -151,6 +151,13 @@ kotlin {
     }
 }
 
+idea {
+    module {
+        isDownloadSources = true
+        isDownloadJavadoc = true
+    }
+}
+
 eclipse {
     classpath {
         plusConfigurations.add(configurations["intellijPlatformClasspath"])

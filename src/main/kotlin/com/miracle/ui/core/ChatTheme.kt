@@ -49,8 +49,8 @@ internal object ChatTheme {
     val DROPDOWN_ROW_BORDER_COLOR: Color = JBColor(Color(221, 228, 237), Color(82, 86, 94))
 
     // ── Gradient border for the composer input ────────────────────────
-    val PRIMARY_BORDER_START: Color = Color(64, 128, 255)
-    val PRIMARY_BORDER_END: Color = Color(32, 96, 255)
+    val PRIMARY_BORDER_START: Color = JBColor(Color(0x7C, 0xB3, 0xFF), Color(0x79, 0x8F, 0xFF))
+    val PRIMARY_BORDER_END: Color = JBColor(Color(0x39, 0xD1, 0xC3), Color(0x48, 0xC1, 0xD8))
 
     // ── Icons ─────────────────────────────────────────────────────────
     val JARVIS_ICON: Icon = iconOrFallback("/img/inner/logo_round24.svg", AllIcons.Nodes.Plugin)

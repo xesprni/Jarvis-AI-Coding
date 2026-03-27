@@ -48,3 +48,6 @@ bin/
 ### JARVIS ###
 .jarvis/
 .jarvis_dev/
+
+.opencode/
+.uml/
