@@ -1,5 +1,0 @@
-private UserDTO convert(User user) {
-    UserDTO userDTO = new UserDTO();
-    userDTO.setName(user.getName());
-    return userDTO;
-}

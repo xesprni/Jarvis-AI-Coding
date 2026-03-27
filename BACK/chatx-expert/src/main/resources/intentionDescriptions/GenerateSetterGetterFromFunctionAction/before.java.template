@@ -1,2 +1,0 @@
-private UserDTO convert(User user) {
-}

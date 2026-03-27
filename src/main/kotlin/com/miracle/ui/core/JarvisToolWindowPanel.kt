@@ -76,7 +76,7 @@ class JarvisToolWindowPanel(
         tabbedPane.refreshModels()
     }
 
-    fun showSettingsOverlay(section: JarvisSettingsSection) {
+    internal fun showSettingsOverlay(section: JarvisSettingsSection) {
         settingsOverlay.showSection(section)
         contentLayout.show(contentContainer, CARD_SETTINGS)
     }

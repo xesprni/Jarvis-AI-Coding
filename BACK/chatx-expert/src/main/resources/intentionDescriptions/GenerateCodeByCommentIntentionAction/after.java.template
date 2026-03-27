@@ -1,9 +1,0 @@
-public User convert(UserAddDto userAddDto) {
-    // 将userAddDto转换为User
-    User user = new User();
-    user.setEmail(userAddDto.getEmail());
-    user.setMac(userAddDto.getMac());
-    user.setReqFrom(userAddDto.getRequestFrom());
-    user.setPluginVersion(userAddDto.getPluginVersion());
-    return user;
-}

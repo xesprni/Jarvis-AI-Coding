@@ -16,7 +16,7 @@ internal enum class JarvisSettingsSection(
     MCP(
         title = "MCP",
         description = "查看 MCP 服务状态并维护本地 MCP 配置。",
-        icon = AllIcons.Nodes.PpLib,
+        icon = AllIcons.Actions.Show,
     ),
     AGENT(
         title = "智能体",
@@ -26,12 +26,12 @@ internal enum class JarvisSettingsSection(
     SKILLS(
         title = "Skills",
         description = "启用、禁用并查看本地 Skills 能力。",
-        icon = AllIcons.Nodes.Tag,
+        icon = AllIcons.Nodes.Template,
     ),
     RULES(
         title = "Rules",
         description = "维护会话提示词与项目规则。",
-        icon = AllIcons.Actions.EditScheme,
+        icon = AllIcons.Actions.Edit,
     ),
     AUTO_APPROVE(
         title = "自动审批",

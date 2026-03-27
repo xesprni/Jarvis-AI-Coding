@@ -34,7 +34,7 @@ class JarvisToolWindowService(private val project: Project) {
         return toolWindow
     }
 
-    fun showSettings(section: JarvisSettingsSection) {
+    internal fun showSettings(section: JarvisSettingsSection) {
         showToolWindow()?.show {
             panel?.showSettingsOverlay(section)
         }

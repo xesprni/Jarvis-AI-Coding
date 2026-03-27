@@ -39,7 +39,7 @@ class JarvisSettingsOverlayPanel(
         preferredSize = JBUI.size(38, 38)
         minimumSize = preferredSize
         maximumSize = preferredSize
-        opaque = true
+        isOpaque = true
         background = ICON_BACKGROUND
         border = BorderFactory.createCompoundBorder(
             JBUI.Borders.customLine(BORDER_COLOR, 1),
@@ -67,7 +67,7 @@ class JarvisSettingsOverlayPanel(
         add(contentHost, BorderLayout.CENTER)
     }
 
-    fun showSection(section: JarvisSettingsSection) {
+    internal fun showSection(section: JarvisSettingsSection) {
         titleLabel.text = section.title
         descriptionLabel.text = section.description
         iconLabel.icon = section.icon
