@@ -58,7 +58,7 @@ internal fun createIconButton(icon: javax.swing.Icon, tooltip: String): JButton 
         disabledIcon = IconLoader.getDisabledIcon(icon)
         toolTipText = tooltip
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        preferredSize = Dimension(JBUI.scale(28), JBUI.scale(28))
+        preferredSize = Dimension(JBUI.scale(24), JBUI.scale(24))
         minimumSize = preferredSize
         maximumSize = preferredSize
     }

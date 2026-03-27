@@ -28,9 +28,9 @@ internal class AssociatedContextHeaderPanel(
     private val onRemoveRequested: (AssociatedContextItem) -> Unit,
 ) : JPanel(BorderLayout()) {
 
-    private val itemsPanel = JPanel(WrapLayout(FlowLayout.LEFT, JBUI.scale(6), JBUI.scale(6))).apply {
+    private val itemsPanel = JPanel(WrapLayout(FlowLayout.LEFT, JBUI.scale(4), JBUI.scale(4))).apply {
         isOpaque = false
-        border = JBUI.Borders.empty(6, 8, 0, 8)
+        border = JBUI.Borders.empty(4, 8, 0, 8)
     }
     private val emptyText = JBLabel("暂无关联文件/代码").apply {
         foreground = JBUI.CurrentTheme.Label.disabledForeground()
@@ -130,7 +130,7 @@ internal class AssociatedContextHeaderPanel(
     ) : JButton() {
         init {
             cursor = Cursor(Cursor.HAND_CURSOR)
-            preferredSize = JBUI.size(18, 18)
+            preferredSize = JBUI.size(16, 16)
             minimumSize = preferredSize
             maximumSize = preferredSize
             isContentAreaFilled = false
@@ -195,7 +195,7 @@ internal class AssociatedContextHeaderPanel(
             repaint()
         }
 
-        override fun getPreferredSize() = super.getPreferredSize().let { java.awt.Dimension(it.width, 18) }
+        override fun getPreferredSize() = super.getPreferredSize().let { java.awt.Dimension(it.width, 16) }
         override fun getMinimumSize() = preferredSize
         override fun getMaximumSize() = preferredSize
 

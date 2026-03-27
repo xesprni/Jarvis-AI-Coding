@@ -39,11 +39,9 @@ internal object ChatPromptPanel {
         val leftToolbarPanel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.X_AXIS)
             isOpaque = false
-            add(modelComboBox)
-            add(Box.createHorizontalStrut(JBUI.scale(3)))
-            add(createToolbarSeparator())
-            add(Box.createHorizontalStrut(JBUI.scale(3)))
-            add(chatModeComboBox)
+            add(wrapSelectorComboBox(chatModeComboBox))
+            add(Box.createHorizontalStrut(JBUI.scale(2)))
+            add(wrapSelectorComboBox(modelComboBox))
         }
 
         val rightButtonPanel = JPanel().apply {
@@ -62,7 +60,7 @@ internal object ChatPromptPanel {
             isOpaque = false
             border = BorderFactory.createCompoundBorder(
                 JBUI.Borders.customLine(SPLIT_LINE_COLOR, 1, 0, 0, 0),
-                JBUI.Borders.empty(6, 10, 8, 10),
+                JBUI.Borders.empty(4, 8, 6, 8),
             )
             add(leftToolbarPanel, BorderLayout.CENTER)
             add(rightButtonPanel, BorderLayout.EAST)
@@ -73,7 +71,7 @@ internal object ChatPromptPanel {
             background = PANEL_BACKGROUND
             border = BorderFactory.createCompoundBorder(
                 JBUI.Borders.customLine(SPLIT_LINE_COLOR, 1, 0, 0, 0),
-                JBUI.Borders.empty(6, 10, 10, 10),
+                JBUI.Borders.empty(4, 8, 8, 8),
             )
             add(askPanel, BorderLayout.NORTH)
             add(JPanel(BorderLayout()).apply {

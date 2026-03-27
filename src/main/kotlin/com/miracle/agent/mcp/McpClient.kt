@@ -25,6 +25,7 @@ import kotlinx.io.buffered
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.IOException
+import kotlin.time.Duration.Companion.milliseconds
 
 class McpClient(
     clientInfo: Implementation = Implementation(name = "default-mcp-client", version = "1.0.0")
@@ -67,7 +68,7 @@ class McpClient(
         )
         // Connect the MCP client to the server using the transport
         try {
-            withTimeout(startupTimeout) {
+            withTimeout(startupTimeout.milliseconds) {
                 mcp.connect(transport)
             }
         } catch (t: Throwable) {

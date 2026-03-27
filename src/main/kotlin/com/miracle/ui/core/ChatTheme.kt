@@ -31,6 +31,10 @@ internal object ChatTheme {
     val MUTED_FOREGROUND: Color = JBColor(Color(0x6B, 0x75, 0x86), Color(0xA0, 0xA8, 0xB8))
     val USER_FOREGROUND: Color = JBColor(Color(0x1F, 0x5D, 0xE6), Color(0x9C, 0xBE, 0xFF))
     val SELECTOR_TEXT_FOREGROUND: Color = JBColor(Color(0x1F, 0x29, 0x38), Color(0xF2, 0xF5, 0xF8))
+    val SELECTOR_HOVER_BACKGROUND: Color = JBColor(Color(0xEF, 0xF1, 0xF4), Color(0x39, 0x3E, 0x46))
+    val SELECTOR_PRESSED_BACKGROUND: Color = JBColor(Color(0xE4, 0xE8, 0xED), Color(0x33, 0x38, 0x40))
+    val SELECTOR_HOVER_BORDER: Color = JBColor(Color(0xD7, 0xDE, 0xE7), Color(0x52, 0x5A, 0x64))
+    val SELECTOR_PRESSED_BORDER: Color = JBColor(Color(0xC6, 0xCF, 0xDA), Color(0x62, 0x6B, 0x76))
 
     // ── Error ─────────────────────────────────────────────────────────
     val ERROR_BACKGROUND: Color = JBColor(Color(0xFDECEA), Color(0x4A3434))

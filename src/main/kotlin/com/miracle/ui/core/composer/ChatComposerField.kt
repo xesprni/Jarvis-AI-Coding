@@ -84,9 +84,9 @@ class ChatComposerField(
 
     init {
         isOneLineMode = false
-        minimumSize = Dimension(0, JBUI.scale(112))
-        preferredSize = Dimension(0, JBUI.scale(112))
-        maximumSize = Dimension(Int.MAX_VALUE, JBUI.scale(180))
+        minimumSize = Dimension(0, JBUI.scale(72))
+        preferredSize = Dimension(0, JBUI.scale(72))
+        maximumSize = Dimension(Int.MAX_VALUE, JBUI.scale(152))
         setPlaceholder("Ask anything... Use '/' for commands, '@' for references")
     }
 
@@ -103,7 +103,7 @@ class ChatComposerField(
     }
 
     override fun updateBorder(editor: EditorEx) {
-        editor.setBorder(JBUI.Borders.empty(5, 8))
+        editor.setBorder(JBUI.Borders.empty(2, 8))
     }
 
     fun expandedText(): String {
