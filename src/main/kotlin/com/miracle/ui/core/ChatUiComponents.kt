@@ -149,6 +149,8 @@ internal fun createActionButton(
 internal fun createOptionChipButton(
     text: String,
     tooltip: String,
+    verticalPadding: Int = 4,
+    horizontalPadding: Int = 8,
     action: () -> Unit,
 ): JButton {
     val palette = ActionPalette(
@@ -158,7 +160,16 @@ internal fun createOptionChipButton(
         hoverBorder = ChatTheme.PLAN_ACTION_SECONDARY_HOVER_BORDER,
         foreground = ChatTheme.PLAN_ACTION_SECONDARY_FOREGROUND,
     )
-    return createStyledActionButton(text, tooltip, palette, compact = true, bold = false, action = action)
+    return createStyledActionButton(
+        text = text,
+        tooltip = tooltip,
+        palette = palette,
+        compact = true,
+        bold = false,
+        verticalPadding = verticalPadding,
+        horizontalPadding = horizontalPadding,
+        action = action,
+    )
 }
 
 internal fun createApproveButton(text: String, tooltip: String, action: () -> Unit): JButton {
@@ -201,13 +212,15 @@ private fun createStyledActionButton(
     palette: ActionPalette,
     compact: Boolean,
     bold: Boolean,
+    verticalPadding: Int = if (compact) 4 else 5,
+    horizontalPadding: Int = if (compact) 8 else 10,
     action: () -> Unit,
 ): JButton {
     fun JButton.applyPalette(background: Color, borderColor: Color) {
         this.background = background
         border = javax.swing.BorderFactory.createCompoundBorder(
             createRoundedBorder(borderColor),
-            JBUI.Borders.empty(if (compact) 4 else 5, if (compact) 8 else 10),
+            JBUI.Borders.empty(verticalPadding, horizontalPadding),
         )
     }
 
