@@ -120,9 +120,9 @@ internal class AskPanel(
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = true
             background = ChatTheme.PLAN_CARD_BACKGROUND
-            border = JBUI.Borders.empty(12)
+            border = JBUI.Borders.empty(10)
             add(inputWrapper)
-            add(Box.createVerticalStrut(JBUI.scale(10)))
+            add(Box.createVerticalStrut(JBUI.scale(8)))
             add(actionPanel)
         }, BorderLayout.SOUTH)
     }
@@ -316,22 +316,23 @@ internal class AskPanel(
             alignmentX = Component.LEFT_ALIGNMENT
             border = BorderFactory.createCompoundBorder(
                 createRoundedBorder(ChatTheme.INTERACTION_INPUT_BORDER),
-                JBUI.Borders.empty(10, 12),
+                JBUI.Borders.empty(8, 10),
             )
             add(title)
             add(prompt)
             add(options)
-            add(Box.createVerticalStrut(JBUI.scale(8)))
+            add(Box.createVerticalStrut(JBUI.scale(6)))
             add(field)
             maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
         }
     }
 
     private fun styleInputField(field: JTextField) {
+        field.font = JBFont.small()
         field.background = ChatTheme.INTERACTION_INPUT_BACKGROUND
         field.border = BorderFactory.createCompoundBorder(
             createRoundedBorder(ChatTheme.INTERACTION_INPUT_BORDER),
-            JBUI.Borders.empty(6, 8),
+            JBUI.Borders.empty(4, 7),
         )
         field.maximumSize = Dimension(Int.MAX_VALUE, field.preferredSize.height)
     }

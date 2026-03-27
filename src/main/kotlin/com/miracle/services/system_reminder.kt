@@ -216,7 +216,7 @@ class SystemReminderService(private val convId: String, private val agentId: Str
 
 Use only the read-only planning tools available in this mode. Explore the codebase first, then ask focused follow-up questions only when they materially change the implementation plan.
 
-When the spec is decision-complete, finish by emitting exactly one <proposed_plan>...</proposed_plan> block in the assistant response. Do not write plan files, do not call plan-mode transition tools, and do not output multiple proposed plans in the same turn.""",
+When the spec is decision-complete, include exactly one <proposed_plan>...</proposed_plan> block in the assistant response. If you need a short handoff or clarification, put it after the closing tag in plain text. Do not write plan files, do not call plan-mode transition tools, and do not output multiple proposed plans in the same turn.""",
             )
             return listOf(reminder)
         }

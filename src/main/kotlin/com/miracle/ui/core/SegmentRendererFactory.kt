@@ -10,6 +10,7 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.miracle.agent.parser.Code
 import com.miracle.agent.parser.ErrorSegment
+import com.miracle.agent.parser.PlanBlockParser
 import com.miracle.agent.parser.ProposedPlanSegment
 import com.miracle.agent.parser.SearchReplace
 import com.miracle.agent.parser.Segment
@@ -78,6 +79,11 @@ internal class SegmentRendererFactory(
             else -> createMarkdownBlock(segment.content)
         }
         return scrollManager.wrapForConversationWidth(content)
+    }
+
+    fun normalizeSegmentsForDisplay(segments: List<Segment>): List<Segment> {
+        if (segments.isEmpty()) return segments
+        return PlanBlockParser.expandSegments(mergeAdjacentTextSegments(segments))
     }
 
     fun renderSegmentsAsText(segments: List<Segment>): String {
@@ -423,6 +429,37 @@ internal class SegmentRendererFactory(
     }
 
     // ── Path utility ─────────────────────────────────────────────────
+
+    private fun mergeAdjacentTextSegments(segments: List<Segment>): List<Segment> {
+        val merged = mutableListOf<Segment>()
+        var pendingText: TextSegment? = null
+
+        fun flushPending() {
+            pendingText?.let { merged.add(it) }
+            pendingText = null
+        }
+
+        segments.forEach { segment ->
+            when (segment) {
+                is TextSegment -> {
+                    pendingText = if (pendingText == null) {
+                        segment
+                    } else {
+                        TextSegment(
+                            text = pendingText!!.text + segment.text,
+                            eventId = pendingText!!.eventId ?: segment.eventId,
+                        )
+                    }
+                }
+                else -> {
+                    flushPending()
+                    merged.add(segment)
+                }
+            }
+        }
+        flushPending()
+        return merged
+    }
 
     fun displayPath(path: String): String {
         val basePath = project.basePath ?: return path

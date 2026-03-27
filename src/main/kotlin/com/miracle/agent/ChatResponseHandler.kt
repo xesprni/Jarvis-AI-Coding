@@ -22,7 +22,6 @@ class ChatResponseHandler(
         val LOG = thisLogger()
     }
 
-    private val parser = SseMessageParser()
     private val textBuffer = StringBuilder()
     private val allTextBuffer = StringBuilder()
     private val toolParamsBuffer = StringBuilder()
@@ -88,25 +87,29 @@ class ChatResponseHandler(
     private fun sendBuffer(forceSend: Boolean = false) {
         if (textBuffer.isEmpty()) {
             if (forceSend && hasOpenPartialResponse && lastSegments.isNotEmpty()) {
-                taskState.emit!!(JarvisSay(id = "AI_STREAMING_RESP", type = AgentMessageType.TEXT, data = lastSegments, isPartial = false))
+                taskState.emit!!(JarvisSay(id = taskState.curMessageId, type = AgentMessageType.TEXT, data = lastSegments, isPartial = false))
                 hasOpenPartialResponse = false
             }
             return
         }
         if (!forceSend && System.currentTimeMillis() - lastSendTime < SEND_INTERVAL) return
 
-        val segments = parser.parse(textBuffer.toString())
         textBuffer.clear()
+
+        // 使用完整累积文本重新解析，确保包含所有已完成的 segment（如 code block 之前的文本）
+        // SseMessageParser 的内部 buffer 会在遇到代码块等结构时消耗已完成的内容，
+        // 导致后续调用丢失先前的 segment。使用 allTextBuffer 全量解析避免此问题。
+        val segments = SseMessageParser().parse(allTextBuffer.toString())
         if (segments.isEmpty()) {
             if (forceSend && hasOpenPartialResponse && lastSegments.isNotEmpty()) {
-                taskState.emit!!(JarvisSay(id = "AI_STREAMING_RESP", type = AgentMessageType.TEXT, data = lastSegments, isPartial = false))
+                taskState.emit!!(JarvisSay(id = taskState.curMessageId, type = AgentMessageType.TEXT, data = lastSegments, isPartial = false))
                 hasOpenPartialResponse = false
             }
             return
         }
 
         segments.filter { it is TextSegment }.map { (it as TextSegment).eventId = taskState.curMessageId }
-        taskState.emit!!(JarvisSay(id = "AI_STREAMING_RESP", type = AgentMessageType.TEXT, data = segments, isPartial = !forceSend))
+        taskState.emit!!(JarvisSay(id = taskState.curMessageId, type = AgentMessageType.TEXT, data = segments, isPartial = !forceSend))
         lastSegments = segments
         hasOpenPartialResponse = !forceSend
         lastSendTime = System.currentTimeMillis()

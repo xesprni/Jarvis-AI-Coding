@@ -13,6 +13,7 @@ class PromptServiceTest {
         assertTrue(prompt.contains("<proposed_plan>"))
         assertTrue(prompt.contains("read-only"))
         assertTrue(prompt.contains("RequestUserInput"))
+        assertTrue(prompt.contains("after the closing </proposed_plan> tag"))
         assertFalse(prompt.contains("TodoWrite"))
         assertFalse(prompt.contains("ExitPlanMode"))
         assertFalse(prompt.contains("Write tool"))

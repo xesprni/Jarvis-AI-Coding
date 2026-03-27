@@ -207,7 +207,7 @@ private fun createStyledActionButton(
         this.background = background
         border = javax.swing.BorderFactory.createCompoundBorder(
             createRoundedBorder(borderColor),
-            JBUI.Borders.empty(if (compact) 5 else 7, if (compact) 10 else 12),
+            JBUI.Borders.empty(if (compact) 4 else 5, if (compact) 8 else 10),
         )
     }
 

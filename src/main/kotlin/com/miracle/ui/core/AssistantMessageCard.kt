@@ -34,7 +34,8 @@ internal class AssistantMessageCard(
     private var thoughtPanel: ThoughtProcessPanel? = null
 
     fun updateContent(segments: List<Segment>, type: AgentMessageType, partial: Boolean) {
-        lastSegments = segments
+        val normalizedSegments = renderer.normalizeSegmentsForDisplay(segments)
+        lastSegments = normalizedSegments
         lastType = type
         lastPartial = partial
         shell.root.isOpaque = false
@@ -47,11 +48,11 @@ internal class AssistantMessageCard(
         })
         shell.header.add(Box.createHorizontalGlue())
         shell.header.add(createHeaderIconButton(AllIcons.Actions.Copy, "复制消息") {
-            copyToClipboard(renderer.renderSegmentsAsText(segments))
+            copyToClipboard(renderer.renderSegmentsAsText(normalizedSegments))
         })
 
         shell.body.removeAll()
-        if (segments.isEmpty()) {
+        if (normalizedSegments.isEmpty()) {
             shell.body.add(
                 renderer.createTextBlock(
                     "等待模型响应...", ASSISTANT_BUBBLE,
@@ -60,7 +61,7 @@ internal class AssistantMessageCard(
             )
         } else if (type == AgentMessageType.REASONING) {
             val tp = thoughtPanel ?: ThoughtProcessPanel().also { thoughtPanel = it }
-            val text = segments.joinToString("\n") { it.content }
+            val text = normalizedSegments.joinToString("\n") { it.content }
             tp.updateText(text)
             if (!partial) tp.setFinished()
             shell.body.add(tp)
@@ -70,7 +71,7 @@ internal class AssistantMessageCard(
                 shell.body.add(thoughtPanel!!)
                 shell.body.add(Box.createVerticalStrut(JBUI.scale(8)))
             }
-            segments.forEachIndexed { index, segment ->
+            normalizedSegments.forEachIndexed { index, segment ->
                 if (index > 0) shell.body.add(Box.createVerticalStrut(JBUI.scale(8)))
                 shell.body.add(renderer.renderSegment(segment))
             }

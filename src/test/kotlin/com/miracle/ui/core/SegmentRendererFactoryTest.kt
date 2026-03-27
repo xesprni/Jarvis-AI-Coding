@@ -2,6 +2,7 @@ package com.miracle.ui.core
 
 import com.intellij.openapi.project.Project
 import com.miracle.agent.parser.ProposedPlanSegment
+import com.miracle.agent.parser.TextSegment
 import io.mockk.mockk
 import java.awt.Component
 import java.awt.Container
@@ -53,6 +54,29 @@ class SegmentRendererFactoryTest {
             capturedActions,
         )
         assertEquals(listOf(planSegment, planSegment), capturedPlans)
+    }
+
+    @Test
+    fun normalizeSegmentsForDisplayShouldConvertRawPlanTagsIntoPlanSegment() {
+        val scrollContent = JPanel()
+        val scrollPane = JScrollPane(scrollContent)
+        val scrollManager = ChatScrollManager(scrollPane, scrollContent)
+        val renderer = SegmentRendererFactory(
+            project = project,
+            scrollManager = scrollManager,
+        )
+
+        val normalized = renderer.normalizeSegmentsForDisplay(
+            listOf(
+                TextSegment("Before\n<proposed_plan>\n# Plan"),
+                TextSegment("\n- item\n</proposed_plan>\nAfter"),
+            )
+        )
+
+        val plan = normalized.filterIsInstance<ProposedPlanSegment>().single()
+        assertTrue(plan.markdown.contains("# Plan"))
+        assertTrue(normalized.filterIsInstance<TextSegment>().any { it.text.contains("Before") })
+        assertTrue(normalized.filterIsInstance<TextSegment>().any { it.text.contains("After") })
     }
 
     private fun collectButtons(component: Component): List<AbstractButton> {

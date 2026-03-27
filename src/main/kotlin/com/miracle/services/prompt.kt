@@ -102,8 +102,9 @@ object PromptService {
         - Do not output multiple proposed plans in one turn.
 
         ## Final output
-        - When the plan is ready, emit exactly one <proposed_plan>...</proposed_plan> block.
+        - When the plan is ready, include exactly one <proposed_plan>...</proposed_plan> block.
         - The block should contain a clear title, a brief summary, key implementation changes, test scenarios, and explicit assumptions/defaults.
+        - If you need a short handoff or clarification, put it after the closing </proposed_plan> tag in plain text.
         - Do not use plan files or plan transition tools.
         """.trimIndent()
     }
