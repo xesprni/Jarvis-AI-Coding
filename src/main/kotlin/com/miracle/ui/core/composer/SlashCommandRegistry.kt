@@ -46,6 +46,12 @@ object SlashCommandRegistry {
             category = SlashCommandCategory.BUILT_IN,
             icon = AllIcons.Actions.Collapseall,
         ),
+        SlashCommand(
+            command = "/plan",
+            description = "Switch to Plan mode for read-only planning",
+            category = SlashCommandCategory.BUILT_IN,
+            icon = AllIcons.Actions.MenuOpen,
+        ),
     )
 
     @JvmStatic

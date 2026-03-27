@@ -35,7 +35,7 @@ class SseMessageParser: MessageParser{
             position = endPosition
         }
         segments.addAll(getPendingSegments())
-        return PlanBlockParser.expandSegments(segments)
+        return segments
     }
 
     private fun processNextSegment(segments: MutableList<Segment>): Boolean {

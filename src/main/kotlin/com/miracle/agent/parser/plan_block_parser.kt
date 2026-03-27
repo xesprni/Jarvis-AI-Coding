@@ -46,6 +46,13 @@ internal object PlanBlockParser {
         }
     }
 
+    /**
+     * 从文本中移除 <proposed_plan> 和 </proposed_plan> 标签，保留标签内的内容。
+     */
+    fun stripTags(text: String): String {
+        return text.replace(OPEN_TAG, "").replace(CLOSE_TAG, "")
+    }
+
     private fun addTextSegment(segments: MutableList<Segment>, text: String) {
         if (text.isNotEmpty()) {
             segments.add(TextSegment(text))

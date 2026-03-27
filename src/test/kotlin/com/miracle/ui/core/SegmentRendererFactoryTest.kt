@@ -11,6 +11,7 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -57,7 +58,7 @@ class SegmentRendererFactoryTest {
     }
 
     @Test
-    fun normalizeSegmentsForDisplayShouldConvertRawPlanTagsIntoPlanSegment() {
+    fun normalizeSegmentsForDisplayShouldStripPlanTagsFromText() {
         val scrollContent = JPanel()
         val scrollPane = JScrollPane(scrollContent)
         val scrollManager = ChatScrollManager(scrollPane, scrollContent)
@@ -73,10 +74,14 @@ class SegmentRendererFactoryTest {
             )
         )
 
-        val plan = normalized.filterIsInstance<ProposedPlanSegment>().single()
-        assertTrue(plan.markdown.contains("# Plan"))
-        assertTrue(normalized.filterIsInstance<TextSegment>().any { it.text.contains("Before") })
-        assertTrue(normalized.filterIsInstance<TextSegment>().any { it.text.contains("After") })
+        // Tags should be stripped, no ProposedPlanSegment created
+        assertTrue(normalized.none { it is ProposedPlanSegment })
+        val text = normalized.filterIsInstance<TextSegment>().joinToString("") { it.text }
+        assertTrue(text.contains("Before"))
+        assertTrue(text.contains("# Plan"))
+        assertTrue(text.contains("After"))
+        assertFalse(text.contains("<proposed_plan>"))
+        assertFalse(text.contains("</proposed_plan>"))
     }
 
     private fun collectButtons(component: Component): List<AbstractButton> {

@@ -820,6 +820,7 @@ class JarvisChatTabPanel(
             "/clear" -> executeClearCommand()
             "/new" -> executeNewCommand()
             "/compact" -> executeCompactCommand()
+            "/plan" -> executePlanCommand()
         }
     }
 
@@ -869,6 +870,16 @@ class JarvisChatTabPanel(
                 }
             }
         }
+    }
+
+    private fun executePlanCommand() {
+        switchChatMode(ChatMode.PLAN)
+        if (composerField.expandedText().trim().isBlank()) {
+            composerField.applyInsertion(
+                ChatComposerInsertion.PlainText("\u8BF7\u5E2E\u6211\u89C4\u5212\u4EE5\u4E0B\u4EFB\u52A1\uFF1A")
+            )
+        }
+        requestFocusForInput()
     }
 
     private fun resetConversationUi() {

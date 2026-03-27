@@ -84,7 +84,7 @@ internal class SegmentRendererFactory(
 
     fun normalizeSegmentsForDisplay(segments: List<Segment>): List<Segment> {
         if (segments.isEmpty()) return segments
-        return PlanBlockParser.expandSegments(mergeAdjacentTextSegments(segments))
+        return stripPlanTags(mergeAdjacentTextSegments(segments))
     }
 
     fun renderSegmentsAsText(segments: List<Segment>): String {
@@ -296,7 +296,7 @@ internal class SegmentRendererFactory(
             add(Box.createHorizontalGlue())
         }
         val subtitle = JBLabel(
-            "<html><body>Keep refining the plan here, or hand it to Agent when you are ready to execute.</body></html>",
+            "<html><body>Plan mode response. You can execute this plan in Agent mode or continue refining.</body></html>",
         ).apply {
             font = JBFont.small()
             foreground = ChatTheme.MUTED_FOREGROUND
@@ -433,6 +433,20 @@ internal class SegmentRendererFactory(
     }
 
     // ── Path utility ─────────────────────────────────────────────────
+
+    /**
+     * 移除 TextSegment 中的 <proposed_plan> / </proposed_plan> 标签文本。
+     */
+    private fun stripPlanTags(segments: List<Segment>): List<Segment> {
+        return segments.map { segment ->
+            if (segment is TextSegment) {
+                val stripped = PlanBlockParser.stripTags(segment.text)
+                if (stripped != segment.text) TextSegment(stripped, segment.eventId) else segment
+            } else {
+                segment
+            }
+        }
+    }
 
     private fun mergeAdjacentTextSegments(segments: List<Segment>): List<Segment> {
         val merged = mutableListOf<Segment>()

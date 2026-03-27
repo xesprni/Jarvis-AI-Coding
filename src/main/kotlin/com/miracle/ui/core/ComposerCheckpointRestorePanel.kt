@@ -36,12 +36,13 @@ internal class ComposerCheckpointRestorePanel(
         currentMessageId?.let(onRestoreAll)
     }.apply {
         alignmentY = Component.CENTER_ALIGNMENT
+        applySmallChipBorder()
     }
 
     private val detailsPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         isOpaque = false
-        border = JBUI.Borders.emptyBottom(4)
+        border = JBUI.Borders.emptyBottom(2)
         isVisible = false
         alignmentX = Component.LEFT_ALIGNMENT
     }
@@ -68,7 +69,7 @@ internal class ComposerCheckpointRestorePanel(
         background = ChatTheme.PLAN_CARD_SURFACE_BACKGROUND
         border = BorderFactory.createCompoundBorder(
             createRoundedBorder(ChatTheme.PLAN_ACTION_SECONDARY_BORDER),
-            JBUI.Borders.empty(4, 8),
+            JBUI.Borders.empty(2, 6),
         )
         alignmentX = Component.LEFT_ALIGNMENT
         add(detailsPanel, BorderLayout.CENTER)
@@ -130,7 +131,7 @@ internal class ComposerCheckpointRestorePanel(
             tooltip = "\u4EC5\u6062\u590D\u8FD9\u4E2A\u6587\u4EF6",
         ) {
             currentMessageId?.let { onRestoreFile(it, summary.absolutePath) }
-        }
+        }.apply { applySmallChipBorder() }
 
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.X_AXIS)
@@ -170,5 +171,12 @@ internal class ComposerCheckpointRestorePanel(
         isVisible = currentFiles.isNotEmpty()
         revalidate()
         repaint()
+    }
+
+    private fun JButton.applySmallChipBorder() {
+        border = BorderFactory.createCompoundBorder(
+            createRoundedBorder(ChatTheme.PLAN_ACTION_SECONDARY_BORDER),
+            JBUI.Borders.empty(2, 6),
+        )
     }
 }

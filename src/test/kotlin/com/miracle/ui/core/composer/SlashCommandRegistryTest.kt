@@ -32,7 +32,7 @@ class SlashCommandRegistryTest {
 
         val commands = SlashCommandRegistry.getCommands(skills, SlashCommandScope.ALL)
 
-        assertEquals(listOf("/clear", "/compact", "/new", "/review"), commands.map { it.command })
+        assertEquals(listOf("/clear", "/compact", "/new", "/plan", "/review"), commands.map { it.command })
         assertEquals(listOf("<target>"), commands.last().argumentTemplates)
         assertEquals(SlashCommandCategory.SKILL, commands.last().category)
     }
@@ -41,18 +41,18 @@ class SlashCommandRegistryTest {
     fun testSkillsOnlyScopeExcludesBuiltIns() {
         val skills = listOf(
             SkillConfig(
-                name = "plan",
-                description = "Plan work",
+                name = "custom-skill",
+                description = "Custom skill work",
                 content = "",
-                filePath = "/tmp/plan/SKILL.md",
-                baseDir = "/tmp/plan",
+                filePath = "/tmp/custom-skill/SKILL.md",
+                baseDir = "/tmp/custom-skill",
                 scope = SkillConfig.Scope.PROJECT,
             )
         )
 
         val commands = SlashCommandRegistry.getCommands(skills, SlashCommandScope.SKILLS_ONLY)
 
-        assertEquals(listOf("/plan"), commands.map { it.command })
+        assertEquals(listOf("/custom-skill"), commands.map { it.command })
         assertTrue(commands.all { it.category == SlashCommandCategory.SKILL })
     }
 
@@ -68,5 +68,12 @@ class SlashCommandRegistryTest {
         val command = SlashCommandRegistry.findBuiltInCommand("/NEW")
         assertNotNull(command)
         assertEquals("/new", command.command)
+    }
+
+    @Test
+    fun testFindBuiltInPlanCommand() {
+        val command = SlashCommandRegistry.findBuiltInCommand(" /PLAN ")
+        assertNotNull(command)
+        assertEquals("/plan", command.command)
     }
 }

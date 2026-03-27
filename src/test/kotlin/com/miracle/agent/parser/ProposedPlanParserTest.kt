@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 class ProposedPlanParserTest {
 
     @Test
-    fun completeMessageParserShouldExtractProposedPlanBlock() {
+    fun completeMessageParserShouldNotExtractProposedPlanBlock() {
         val parser = CompleteMessageParser()
         val input = """
             Intro text
@@ -21,9 +21,8 @@ class ProposedPlanParserTest {
 
         val segments = parser.parse(input)
 
-        assertTrue(segments.any { it is ProposedPlanSegment })
-        val plan = segments.filterIsInstance<ProposedPlanSegment>().single()
-        assertTrue(plan.markdown.contains("# Title"))
+        // Parser no longer expands <proposed_plan> tags; they stay as text
+        assertFalse(segments.any { it is ProposedPlanSegment })
         assertTrue(segments.filterIsInstance<TextSegment>().any { it.text.contains("Intro text") })
         assertTrue(segments.filterIsInstance<TextSegment>().any { it.text.contains("Outro text") })
     }
@@ -46,7 +45,7 @@ class ProposedPlanParserTest {
     }
 
     @Test
-    fun sseParserShouldHandleProposedPlanAcrossChunks() {
+    fun sseParserShouldNotExtractProposedPlanFromTags() {
         val parser = SseMessageParser()
         val chunks = listOf(
             "Before\n<proposed_",
@@ -59,9 +58,8 @@ class ProposedPlanParserTest {
             latestSegments = parser.parse(chunk)
         }
 
-        assertTrue(latestSegments.any { it is ProposedPlanSegment })
-        val plan = latestSegments.filterIsInstance<ProposedPlanSegment>().single()
-        assertTrue(plan.markdown.contains("My Plan"))
+        // Parser no longer expands <proposed_plan> tags
+        assertFalse(latestSegments.any { it is ProposedPlanSegment })
         assertTrue(latestSegments.filterIsInstance<TextSegment>().any { it.text.contains("After") })
     }
 

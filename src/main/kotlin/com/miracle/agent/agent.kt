@@ -317,7 +317,22 @@ class Task(
                         val parser = CompleteMessageParser()
                         val segments = parser.parse(aiMessage.text()!!)
                             .filter { it is TextSegment || it is Code || it is SearchReplace || it is ProposedPlanSegment }
-                        taskState.historyAiMessage.segments.addAll(segments)
+
+                        // Plan 模式下,如果响应结束(没有工具调用),将整个响应包装为 ProposedPlanSegment 以显示执行按钮
+                        if (taskState.chatMode == ChatMode.PLAN && !aiMessage.hasToolExecutionRequests()) {
+                            val planText = PlanBlockParser.stripTags(aiMessage.text() ?: "")
+                            val planSegment = ProposedPlanSegment(planText)
+                            taskState.historyAiMessage.segments.add(planSegment)
+                            // 通知 UI 渲染 ProposedPlanSegment（含执行按钮）
+                            taskState.emit?.invoke(JarvisSay(
+                                id = taskState.curMessageId,
+                                type = AgentMessageType.TEXT,
+                                data = listOf(planSegment),
+                                isPartial = false
+                            ))
+                        } else {
+                            taskState.historyAiMessage.segments.addAll(segments)
+                        }
                     }
                     // 工具调用
                     if (aiMessage.hasToolExecutionRequests()) {
