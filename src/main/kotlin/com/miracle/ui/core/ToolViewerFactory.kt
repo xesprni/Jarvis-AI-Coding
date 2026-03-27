@@ -260,6 +260,7 @@ internal class ToolViewerFactory(
             val listener = object : java.awt.event.MouseAdapter() {
                 override fun mouseClicked(e: java.awt.event.MouseEvent) {
                     val vf = LocalFileSystem.getInstance().findFileByIoFile(resolved) ?: return
+                    if (!vf.isValid) return
                     FileEditorManager.getInstance(project).openFile(vf, true)
                 }
                 override fun mouseEntered(e: java.awt.event.MouseEvent) {

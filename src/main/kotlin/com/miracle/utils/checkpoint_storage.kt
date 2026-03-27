@@ -406,6 +406,7 @@ object CheckpointStorage {
                 val vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(entry.filePath)
                 if (vFile != null) {
                     writeAction { vFile.delete(this) }
+                    vFile.parent?.refresh(true, false)
                     return
                 }
             }
