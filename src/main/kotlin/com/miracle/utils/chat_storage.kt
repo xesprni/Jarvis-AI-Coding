@@ -19,7 +19,6 @@ import kotlin.io.path.*
 data class Conversation(
     val id: String = System.currentTimeMillis().toString(),
     var title: String? = null,
-    var codexThreadId: String? = null,
     var containsImg: Boolean = false,
     val createdTime: Long = System.currentTimeMillis(),
     var updatedTime: Long = createdTime,

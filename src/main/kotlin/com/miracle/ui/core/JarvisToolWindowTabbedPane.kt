@@ -75,6 +75,7 @@ class JarvisToolWindowTabbedPane(
             initialConversationId = initialConversationId,
             onTitleChanged = { renameTab(tabId, it) },
             onOpenConversation = ::openConversationInNewTab,
+            onArchiveConversation = { archiveTabAndOpenNew(tabId) },
         )
 
         val tabComponent = createTabComponent(tabId, resolvedTitle)
@@ -91,6 +92,15 @@ class JarvisToolWindowTabbedPane(
 
     fun openConversationInNewTab(conversationId: String, title: String) {
         addNewTab(initialConversationId = conversationId, title = title)
+    }
+
+    private fun archiveTabAndOpenNew(tabId: String) {
+        val removed = removeTab(tabId) ?: run {
+            addNewTab()
+            return
+        }
+        Disposer.dispose(removed.panel)
+        addNewTab()
     }
 
     fun renameTab(tabId: String, title: String) {
@@ -233,9 +243,8 @@ class JarvisToolWindowTabbedPane(
     private fun closeTab(tabId: String) {
         val keys = activeTabs.keys.toList()
         val removedIndex = keys.indexOf(tabId)
-        val info = activeTabs.remove(tabId) ?: return
+        val info = removeTab(tabId) ?: return
         Disposer.dispose(info.panel)
-        rebuildTabsRow()
 
         if (activeTabs.isEmpty()) {
             addNewTab()
@@ -247,6 +256,18 @@ class JarvisToolWindowTabbedPane(
         selectTab(nextTabId)
         tabsRow.revalidate()
         tabsRow.repaint()
+    }
+
+    private fun removeTab(tabId: String): TabInfo? {
+        val info = activeTabs.remove(tabId) ?: return null
+        if (selectedTabId == tabId) {
+            selectedTabId = null
+            contentPanel.removeAll()
+            contentPanel.revalidate()
+            contentPanel.repaint()
+        }
+        rebuildTabsRow()
+        return info
     }
 
     override fun dispose() {

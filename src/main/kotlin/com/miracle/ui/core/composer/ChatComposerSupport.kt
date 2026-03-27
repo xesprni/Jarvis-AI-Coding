@@ -89,6 +89,17 @@ object ChatComposerSupport {
         return text.substring(range.startOffset, caretOffset.coerceAtMost(range.endOffset))
     }
 
+    fun resolveSlashLookupScope(text: String, caretOffset: Int): SlashCommandScope {
+        val range = findSlashTokenRange(text, caretOffset) ?: return SlashCommandScope.SKILLS_ONLY
+        val prefix = text.substring(0, range.startOffset)
+        val suffix = text.substring(range.endOffset)
+        return if (prefix.isBlank() && suffix.isBlank()) {
+            SlashCommandScope.ALL
+        } else {
+            SlashCommandScope.SKILLS_ONLY
+        }
+    }
+
     fun buildSlashInvocationText(command: SlashCommand): String {
         if (command.argumentTemplates.isEmpty()) {
             return command.command

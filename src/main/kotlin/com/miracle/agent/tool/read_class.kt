@@ -5,12 +5,15 @@ import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiFile
 import com.intellij.psi.search.GlobalSearchScope
+import com.miracle.agent.AgentMessageType
+import com.miracle.agent.JarvisSay
 import com.miracle.agent.TaskState
 import com.miracle.agent.parser.ToolSegment
 import com.miracle.agent.parser.UiToolName
 import com.miracle.utils.JsonField
 import com.miracle.utils.addLineNumbers
 import com.miracle.utils.truncateToCharBudget
+import dev.langchain4j.agent.tool.ToolExecutionRequest
 import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import dev.langchain4j.model.chat.request.json.JsonRawSchema
@@ -66,7 +69,13 @@ Usage:
         return result
     }
 
-    suspend fun execute(taskState: TaskState, fqn: String, offset: Int? = null, limit: Int? = 2000): ToolCallResult<ReadClassToolOutput> {
+    suspend fun execute(
+        taskState: TaskState,
+        fqn: String,
+        offset: Int? = null,
+        limit: Int? = 2000,
+        toolRequest: ToolExecutionRequest,
+    ): ToolCallResult<ReadClassToolOutput> {
         val offset = (offset ?: 1).minus(1)
         val limit = limit ?: 2000
 
@@ -85,6 +94,11 @@ Usage:
         }
         val content = fileContent.lineSequence().drop(offset).take(limit).joinToString("\n")
         val data = ReadClassToolOutput(fqn, content, offset + 1)
+        taskState.emit!!(JarvisSay(
+            id = toolRequest.id(),
+            type = AgentMessageType.TOOL,
+            data = listOf(renderToolSegment(taskState, fqn, data, limit)),
+        ))
         val resultForAssistant = renderResultForAssistant(data)
         return ToolCallResult("result", data, resultForAssistant)
     }
@@ -95,7 +109,7 @@ Usage:
         val lastIndex = segments.indexOfLast { it is ToolSegment && it.name == UiToolName.READ_FILE }
         if (lastIndex >= 0) {
             val old = segments[lastIndex] as ToolSegment
-            segments[lastIndex] = old.copy(toolContent = output.content)
+            segments[lastIndex] = old.copy(toolContent = output.content.ifBlank { renderResultForAssistant(output) })
         }
     }
 
@@ -117,6 +131,27 @@ Usage:
             params = mapOf(
                 "start" to JsonPrimitive(lineOffset + 1),
                 "end" to JsonPrimitive(lineOffset + limit),
+                "agent_name" to JsonPrimitive(
+                    if (taskState.agentId != "default") taskState.agentId else "Jarvis"
+                ),
+            )
+        )
+    }
+
+    private fun renderToolSegment(
+        taskState: TaskState,
+        fqn: String,
+        output: ReadClassToolOutput,
+        limit: Int,
+    ): ToolSegment {
+        val lineCount = output.content.lineSequence().count().coerceAtLeast(1)
+        return ToolSegment(
+            name = UiToolName.READ_FILE,
+            toolCommand = fqn,
+            toolContent = output.content.ifBlank { renderResultForAssistant(output) },
+            params = mapOf(
+                "start" to JsonPrimitive(output.startLine),
+                "end" to JsonPrimitive(output.startLine + minOf(lineCount, limit) - 1),
                 "agent_name" to JsonPrimitive(
                     if (taskState.agentId != "default") taskState.agentId else "Jarvis"
                 ),

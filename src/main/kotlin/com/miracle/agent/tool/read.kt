@@ -1,10 +1,13 @@
 package com.miracle.agent.tool
 
 import com.intellij.openapi.project.Project
+import com.miracle.agent.AgentMessageType
+import com.miracle.agent.JarvisSay
 import com.miracle.agent.TaskState
 import com.miracle.agent.parser.ToolSegment
 import com.miracle.agent.parser.UiToolName
 import com.miracle.utils.*
+import dev.langchain4j.agent.tool.ToolExecutionRequest
 import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import dev.langchain4j.model.chat.request.json.JsonRawSchema
@@ -72,7 +75,13 @@ Usage:
         return ::execute
     }
 
-    suspend fun execute(taskState: TaskState, file_path: String, offset: Int? = null, limit: Int? = 2000): ToolCallResult<ReadToolOutput> {
+    suspend fun execute(
+        taskState: TaskState,
+        file_path: String,
+        offset: Int? = null,
+        limit: Int? = 2000,
+        toolRequest: ToolExecutionRequest,
+    ): ToolCallResult<ReadToolOutput> {
         val fullFilePath = resolveFilePath(file_path, taskState.project)
         val ext = getFileExtension(file_path)
 
@@ -87,6 +96,11 @@ Usage:
         val fileContent = PsiFileUtils.getFileContent(taskState.project, fullFilePath) ?: throw ToolExecutionException("File not found: $fullFilePath")
         val content = fileContent.lineSequence().drop(lineOffset).take(limit ?: 2000).joinToString("\n")
         val data = ReadToolOutput(fullFilePath, content, lineOffset + 1)
+        taskState.emit!!(JarvisSay(
+            id = toolRequest.id(),
+            type = AgentMessageType.TOOL,
+            data = listOf(renderToolSegment(taskState, file_path, data, limit)),
+        ))
         val resultForAssistant = renderResultForAssistant(data)
         return ToolCallResult(
             type = "result",
@@ -139,7 +153,7 @@ Usage:
         val lastIndex = segments.indexOfLast { it is ToolSegment && it.name == UiToolName.READ_FILE }
         if (lastIndex >= 0) {
             val old = segments[lastIndex] as ToolSegment
-            segments[lastIndex] = old.copy(toolContent = output.content)
+            segments[lastIndex] = old.copy(toolContent = uiToolContent(output))
         }
     }
 
@@ -160,6 +174,31 @@ Usage:
                 ),
             )
         )
+    }
+
+    private fun renderToolSegment(
+        taskState: TaskState,
+        filePath: String,
+        output: ReadToolOutput,
+        limit: Int?,
+    ): ToolSegment {
+        val lineCount = output.content.lineSequence().count().coerceAtLeast(1)
+        return ToolSegment(
+            name = UiToolName.READ_FILE,
+            toolCommand = filePath,
+            toolContent = uiToolContent(output),
+            params = mapOf(
+                "start" to JsonPrimitive(output.startLine),
+                "end" to JsonPrimitive(output.startLine + minOf(lineCount, limit ?: lineCount) - 1),
+                "agent_name" to JsonPrimitive(
+                    if (taskState.agentId != "default") taskState.agentId else "Jarvis"
+                ),
+            )
+        )
+    }
+
+    private fun uiToolContent(output: ReadToolOutput): String {
+        return output.content.ifBlank { renderResultForAssistant(output) }
     }
 
     private fun formatFileSizeError(sizeInBytes: Number): String {

@@ -114,4 +114,28 @@ class ChatComposerSupportTest {
         assertNull(ChatComposerSupport.findSlashSearchText("", 0))
         assertNull(ChatComposerSupport.findSlashSearchText("/", 0))
     }
+
+    @Test
+    fun testResolveSlashLookupScopeKeepsBuiltInsForTopLevelPartialSlashToken() {
+        assertEquals(
+            SlashCommandScope.ALL,
+            ChatComposerSupport.resolveSlashLookupScope("/n", 2),
+        )
+        assertEquals(
+            SlashCommandScope.ALL,
+            ChatComposerSupport.resolveSlashLookupScope(" /compact ", 4),
+        )
+    }
+
+    @Test
+    fun testResolveSlashLookupScopeFallsBackToSkillsForEmbeddedSlashToken() {
+        assertEquals(
+            SlashCommandScope.SKILLS_ONLY,
+            ChatComposerSupport.resolveSlashLookupScope("Please use /rev", "Please use /rev".length),
+        )
+        assertEquals(
+            SlashCommandScope.SKILLS_ONLY,
+            ChatComposerSupport.resolveSlashLookupScope("/review <target>", 7),
+        )
+    }
 }

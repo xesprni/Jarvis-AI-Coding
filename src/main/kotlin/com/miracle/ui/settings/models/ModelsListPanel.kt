@@ -192,11 +192,7 @@ class ModelsListPanel(
         // ── description body ──
 
         val descText = buildString {
-            if (model.resolvedApiStyle == com.miracle.services.ModelApiStyle.CODEX_CLI) {
-                append("登录方式: 本机 codex login")
-            } else {
-                append("Endpoint: ${model.endpoint}")
-            }
+            append("Endpoint: ${model.endpoint}")
             append("  |  ${model.resolvedApiStyle.desc}")
             append("  |  Reasoning ${formatReasoningEffort(model.resolvedReasoningEffort)}")
             if (model.supportsImages) append("  |  多模态")

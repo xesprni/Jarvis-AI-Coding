@@ -18,6 +18,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import javax.swing.Icon
+import javax.swing.text.JTextComponent
 
 object UiUtil {
 
@@ -96,5 +97,27 @@ object UiUtil {
         val path = URL(url).path
         val lastDot = path.lastIndexOf('.')
         return if (lastDot > 0) path.substring(lastDot) else ".png"
+    }
+
+    /**
+     * macOS 输入法组合态下，直接 setText 可能让 Swing 内部维护的 committed range 失效。
+     * 在程序化修改文本前先结束当前组合态，避免 JTextComponent 抛出 Invalid range。
+     */
+    fun setTextSafely(component: JTextComponent, value: String, moveCaretToEnd: Boolean = false) {
+        if (component.text == value) {
+            if (moveCaretToEnd) {
+                runCatching { component.caretPosition = value.length }
+            }
+            return
+        }
+        runCatching { component.inputContext?.endComposition() }
+        component.text = value
+        if (moveCaretToEnd) {
+            runCatching { component.caretPosition = value.length }
+        }
+    }
+
+    fun clearTextSafely(component: JTextComponent) {
+        setTextSafely(component, "")
     }
 }

@@ -16,6 +16,7 @@ import com.miracle.agent.parser.SearchReplace
 import com.miracle.agent.parser.Segment
 import com.miracle.agent.parser.TextSegment
 import com.miracle.agent.parser.ToolSegment
+import com.miracle.agent.parser.UiToolName
 import com.miracle.agent.parser.getToolSegmentHeader
 import com.miracle.ui.core.ChatTheme.PANEL_BACKGROUND
 import com.miracle.ui.core.ChatTheme.PLAN_BADGE_BACKGROUND
@@ -212,14 +213,16 @@ internal class SegmentRendererFactory(
 
     // ── Collapsible container ────────────────────────────────────────
 
-    fun createInnerToolContainer(title: String, body: JComponent): JComponent {
+    fun createInnerToolContainer(title: String, body: JComponent, initiallyExpanded: Boolean = false): JComponent {
         val bodyWrapper = JPanel(BorderLayout()).apply {
             isOpaque = true
             background = TOOL_CONTENT_BACKGROUND
             add(body, BorderLayout.CENTER)
-            isVisible = false
+            isVisible = initiallyExpanded
         }
-        val chevronLabel = JLabel(AllIcons.General.ArrowRight).apply {
+        val chevronLabel = JLabel(
+            if (initiallyExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+        ).apply {
             border = JBUI.Borders.emptyRight(4)
         }
         val safeTitle = escapeHtml(title.ifBlank { "tool-result" })
@@ -387,6 +390,7 @@ internal class SegmentRendererFactory(
                 createInnerToolContainer(
                     title = toolViewers.resolveToolTitle(segment),
                     body = toolViewers.createToolBody(segment),
+                    initiallyExpanded = segment.name == UiToolName.TODO_UPDATE,
                 ),
                 BorderLayout.CENTER,
             )

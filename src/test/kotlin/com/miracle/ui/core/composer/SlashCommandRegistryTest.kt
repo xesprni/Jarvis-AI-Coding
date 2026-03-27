@@ -32,7 +32,7 @@ class SlashCommandRegistryTest {
 
         val commands = SlashCommandRegistry.getCommands(skills, SlashCommandScope.ALL)
 
-        assertEquals(listOf("/clear", "/compact", "/review"), commands.map { it.command })
+        assertEquals(listOf("/clear", "/compact", "/new", "/review"), commands.map { it.command })
         assertEquals(listOf("<target>"), commands.last().argumentTemplates)
         assertEquals(SlashCommandCategory.SKILL, commands.last().category)
     }
@@ -61,5 +61,12 @@ class SlashCommandRegistryTest {
         val command = SlashCommandRegistry.findBuiltInCommand(" /CoMpAcT ")
         assertNotNull(command)
         assertEquals("/compact", command.command)
+    }
+
+    @Test
+    fun testFindBuiltInNewCommand() {
+        val command = SlashCommandRegistry.findBuiltInCommand("/NEW")
+        assertNotNull(command)
+        assertEquals("/new", command.command)
     }
 }

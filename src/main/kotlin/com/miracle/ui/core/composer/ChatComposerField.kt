@@ -287,7 +287,7 @@ class ChatComposerField(
                 when {
                     event.oldLength == 0 && event.newFragment.toString() == "@" -> showReferenceLookup("")
                     event.oldLength == 0 && event.newFragment.toString() == "/" -> {
-                        showSlashLookup(resolveSlashLookupScope(text), "/")
+                        showSlashLookup(resolveSlashLookupScope(text, caretOffset), "/")
                     }
                     else -> handleTextChange(text, caretOffset)
                 }
@@ -314,7 +314,7 @@ class ChatComposerField(
                 }
                 showSuggestionsJob?.cancel()
                 showSuggestionsJob = coroutineScope.launch {
-                    showSlashLookup(resolveSlashLookupScope(text), slashSearchText)
+                    showSlashLookup(resolveSlashLookupScope(text, caretOffset), slashSearchText)
                 }
             }
             else -> {
@@ -324,12 +324,8 @@ class ChatComposerField(
         }
     }
 
-    private fun resolveSlashLookupScope(text: String): SlashCommandScope {
-        return if (text.trim() == "/") {
-            SlashCommandScope.ALL
-        } else {
-            SlashCommandScope.SKILLS_ONLY
-        }
+    private fun resolveSlashLookupScope(text: String, caretOffset: Int): SlashCommandScope {
+        return ChatComposerSupport.resolveSlashLookupScope(text, caretOffset)
     }
 
     private fun showReferenceLookup(searchText: String) {

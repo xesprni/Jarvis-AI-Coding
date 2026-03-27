@@ -180,7 +180,7 @@ class ManageCustomModelsDialog(
             return when (columnIndex) {
                 0 -> model.model
                 1 -> model.alias
-                2 -> model.endpoint.ifBlank { "本机 codex login" }
+                2 -> model.endpoint
                 3 -> "${model.resolvedApiStyle.desc} / ${formatReasoningEffort(model.resolvedReasoningEffort)}"
                 4 -> "${model.contextTokens} tokens"
                 5 -> if (model.supportsImages) "✓" else "✗"

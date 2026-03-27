@@ -146,17 +146,6 @@ object PromptService {
             formatPrompt(buildExecutionModeInstructions(), modelId, project)
         }
         val mcpPrompt = if (chatMode == ChatMode.PLAN) "" else McpPromptIntegration.generateMcpPromptSection(project)
-        val codexPrompt = if (modelConfig?.isCodexModel == true) {
-            """
-
-# Codex model guidance
-- Default to direct execution instead of long preambles.
-- Keep progress updates short and only send them when they help the user follow meaningful work.
-- Do not narrate every micro-step or repeat your plan unless the task is large or the user asks for a plan.
-- Keep tool-call preambles to one short sentence at most.
-- Prefer concise implementation-oriented answers over process-heavy explanations.
-""".trimIndent()
-        } else ""
 
         return buildString {
             append(commonPrompt.trimEnd())
@@ -164,11 +153,6 @@ object PromptService {
                 appendLine()
                 appendLine()
                 append(modePrompt)
-            }
-            if (codexPrompt.isNotBlank()) {
-                appendLine()
-                appendLine()
-                append(codexPrompt)
             }
             if (mcpPrompt.isNotBlank()) {
                 appendLine()

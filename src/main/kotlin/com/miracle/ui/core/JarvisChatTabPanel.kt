@@ -26,9 +26,6 @@ import com.miracle.agent.parser.TextSegment
 import com.miracle.agent.parser.Segment
 import com.miracle.agent.tool.ToolRegistry
 import com.miracle.config.JarvisCoreSettings
-import com.miracle.services.CodexCliService
-import com.miracle.services.ModelApiStyle
-import com.miracle.services.ModelConfig
 import com.miracle.services.getCustomModels
 import com.miracle.services.getSelectedModel
 import com.miracle.services.getSelectedModelId
@@ -76,6 +73,7 @@ import java.awt.Dimension
 import java.util.UUID
 import javax.swing.BorderFactory
 import javax.swing.Box
+import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JComboBox
 import javax.swing.JComponent
@@ -89,6 +87,7 @@ class JarvisChatTabPanel(
     initialConversationId: String?,
     private val onTitleChanged: (String) -> Unit,
     private val onOpenConversation: (String, String) -> Unit,
+    private val onArchiveConversation: () -> Unit,
 ) : JPanel(BorderLayout()), Disposable {
 
     private companion object {
@@ -108,6 +107,7 @@ class JarvisChatTabPanel(
     private var activeJob: Job? = null
     private var currentConversationId: String? = initialConversationId
     private var pendingAsk: JarvisAsk? = null
+    private val assistantCards = linkedMapOf<String, AssistantMessageCard>()
     private val partialCards = linkedMapOf<String, AssistantMessageCard>()
     private val userMessageHeaders = linkedMapOf<String, JPanel>()
 
@@ -136,7 +136,7 @@ class JarvisChatTabPanel(
         project = project,
         scrollManager = scrollManager,
         onAskReply = { option ->
-            askPanel.inputField.text = option
+            askPanel.setReplyText(option)
             handleAskReply()
         },
         onProposedPlanAction = ::handleProposedPlanAction,
@@ -159,6 +159,33 @@ class JarvisChatTabPanel(
         onAddRequested = ::showAssociatedFilePicker,
         onRemoveRequested = ::removeAssociatedContextItem,
     )
+    private val composerCheckpointRestorePanel = ComposerCheckpointRestorePanel(
+        onRestoreAll = { messageId ->
+            currentConversationId?.let { conversationId ->
+                rollbackSupport.rollback(conversationId, messageId, activeTask) {
+                    if (currentConversationId == conversationId) {
+                        loadConversation(conversationId)
+                    }
+                }
+            }
+        },
+        onRestoreFile = { messageId, filePath ->
+            currentConversationId?.let { conversationId ->
+                rollbackSupport.restoreFile(conversationId, messageId, filePath, activeTask) {
+                    if (currentConversationId == conversationId) {
+                        refreshComposerCheckpointPanel(messageId)
+                    }
+                }
+            }
+        },
+    )
+    private val composerHeaderPanel = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        isOpaque = false
+        alignmentX = Component.LEFT_ALIGNMENT
+        add(composerCheckpointRestorePanel)
+        add(associatedContextHeader)
+    }
     private val sendButton = createIconButton(SEND_ICON, "\u53D1\u9001")
     private val stopButton = createIconButton(AllIcons.Actions.Suspend, "\u505C\u6B62")
     private val askPanel = AskPanel { decision, text ->
@@ -290,7 +317,7 @@ class JarvisChatTabPanel(
 
         return ChatPromptPanel.create(
             inputComponent = composerField,
-            headerComponent = associatedContextHeader,
+            headerComponent = composerHeaderPanel,
             askPanel = askPanel,
             modelComboBox = modelComboBox,
             chatModeComboBox = chatModeComboBox,
@@ -348,19 +375,10 @@ class JarvisChatTabPanel(
         composerField.clearComposer()
         clearAssociatedContextItems()
         clearAskState()
+        clearComposerCheckpointPanel()
         updateConversationHeader()
 
         val selectedChatMode = JarvisCoreSettings.getInstance().chatMode
-        if (selectedModel.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
-            startCodexCliConversation(
-                modelConfig = selectedModel,
-                conversationId = conversationIdForRequest,
-                userMessageId = userMessageId,
-                displayText = finalText,
-                referencedFilePaths = referencedFilePaths,
-            )
-            return
-        }
         activeJob = uiScope.launch {
             try {
                 val task = Task(
@@ -396,6 +414,7 @@ class JarvisChatTabPanel(
                 withContext(Dispatchers.EDT) {
                     finalizePartialCards()
                     installRollbackActionIfAvailable(userMessageId)
+                    refreshComposerCheckpointPanel(userMessageId)
                     activeJob = null
                     activeTask = null
                     partialCards.clear()
@@ -430,12 +449,13 @@ class JarvisChatTabPanel(
         activeTask?.askResponse(response)
         clearAskState()
         updateComposerState()
+        requestFocusForInput()
     }
 
     /** Called by the [AskPanel] callback. */
-    private fun handleAskReplyFromPanel(decision: AskDecision, text: String) {
-        val ask = pendingAsk ?: return
-        askPanel.inputField.text = text
+    private fun handleAskReplyFromPanel(_decision: AskDecision, text: String) {
+        if (pendingAsk == null) return
+        askPanel.setReplyText(text)
         handleAskReply()
     }
 
@@ -566,18 +586,23 @@ class JarvisChatTabPanel(
         partial: Boolean,
         type: AgentMessageType,
     ) {
-        val existing = partialCards[key]
+        val existing = assistantCards[key]
         if (existing != null) {
             existing.updateContent(segments, type, partial)
             messageContainer.revalidate()
             messageContainer.repaint()
-            if (!partial) partialCards.remove(key)
+            if (partial) {
+                partialCards[key] = existing
+            } else {
+                partialCards.remove(key)
+            }
             return
         }
 
         val card = AssistantMessageCard(renderer)
         card.updateContent(segments, type, partial)
         messageContainer.add(card.root)
+        assistantCards[key] = card
         if (partial) partialCards[key] = card
         messageContainer.revalidate()
         messageContainer.repaint()
@@ -586,191 +611,6 @@ class JarvisChatTabPanel(
 
     private fun finalizePartialCards() {
         partialCards.values.forEach { it.finishPartialIfNeeded() }
-    }
-
-    private fun startCodexCliConversation(
-        modelConfig: ModelConfig,
-        conversationId: String,
-        userMessageId: String,
-        displayText: String,
-        referencedFilePaths: List<String>,
-    ) {
-        val assistantCardKey = "codex-cli-$userMessageId"
-        addOrUpdateAssistantCard(
-            key = assistantCardKey,
-            segments = emptyList(),
-            partial = true,
-            type = AgentMessageType.TEXT,
-        )
-        activeJob = uiScope.launch {
-            try {
-                val promptForCodex = buildCodexCliPrompt(displayText, referencedFilePaths)
-                val conversation = ensureCodexConversation(conversationId, displayText, referencedFilePaths)
-                persistCodexCliUserTurn(
-                    conversationId = conversationId,
-                    userMessageId = userMessageId,
-                    displayText = displayText,
-                    promptForMemory = promptForCodex,
-                    referencedFilePaths = referencedFilePaths,
-                )
-                withContext(Dispatchers.EDT) {
-                    currentConversationId = conversationId
-                    currentConversationTitleLabel.text = conversation.title ?: "新的会话"
-                    onTitleChanged(conversation.title.orEmpty())
-                    updateConversationHeader()
-                }
-
-                val result = CodexCliService.runConversationTurn(
-                    modelConfig = modelConfig,
-                    prompt = promptForCodex,
-                    projectPath = project.basePath,
-                    threadId = conversation.codexThreadId,
-                )
-                val updatedConversation = persistCodexCliAssistantTurn(
-                    conversationId = conversationId,
-                    displayText = displayText,
-                    referencedFilePaths = referencedFilePaths,
-                    assistantText = result.text.trim(),
-                    threadId = result.threadId,
-                )
-                withContext(Dispatchers.EDT) {
-                    addOrUpdateAssistantCard(
-                        key = assistantCardKey,
-                        segments = listOf(TextSegment(result.text.trim())),
-                        partial = false,
-                        type = AgentMessageType.TEXT,
-                    )
-                    currentConversationTitleLabel.text = updatedConversation.title ?: "新的会话"
-                    onTitleChanged(updatedConversation.title.orEmpty())
-                    updateConversationHeader()
-                }
-            } catch (e: CancellationException) {
-                withContext(Dispatchers.EDT) {
-                    addOrUpdateAssistantCard(
-                        key = assistantCardKey,
-                        segments = listOf(ErrorSegment("任务已停止")),
-                        partial = false,
-                        type = AgentMessageType.ERROR,
-                    )
-                }
-                throw e
-            } catch (e: Throwable) {
-                withContext(Dispatchers.EDT) {
-                    addOrUpdateAssistantCard(
-                        key = assistantCardKey,
-                        segments = listOf(ErrorSegment("Error: ${e.message ?: (e::class.simpleName ?: "Unknown error")}")),
-                        partial = false,
-                        type = AgentMessageType.ERROR,
-                    )
-                }
-            } finally {
-                withContext(Dispatchers.EDT) {
-                    finalizePartialCards()
-                    activeJob = null
-                    updateComposerState()
-                    updateConversationHeader()
-                }
-            }
-        }
-        updateComposerState()
-    }
-
-    private fun buildCodexCliPrompt(
-        displayText: String,
-        referencedFilePaths: List<String>,
-    ): String {
-        val uniquePaths = referencedFilePaths.distinct()
-        if (uniquePaths.isEmpty()) {
-            return displayText
-        }
-        val basePath = project.basePath
-        val fileList = uniquePaths.joinToString("\n") { path ->
-            val shownPath = if (basePath.isNullOrBlank()) path else toRelativePath(path, basePath)
-            "- $shownPath"
-        }
-        return buildString {
-            if (displayText.isNotBlank()) {
-                append(displayText.trim())
-                append("\n\n")
-            }
-            append("请重点查看这些文件：\n")
-            append(fileList)
-            if (!basePath.isNullOrBlank()) {
-                append("\n\n项目根目录：")
-                append(basePath)
-            }
-        }
-    }
-
-    private fun ensureCodexConversation(
-        conversationId: String,
-        displayText: String,
-        referencedFilePaths: List<String>,
-    ): Conversation {
-        val conversation = ConversationStore.getConversation(project, conversationId) ?: Conversation(
-            id = conversationId,
-            title = buildCodexConversationTitle(displayText, referencedFilePaths),
-            projectPath = project.basePath?.let(::toPosixPath),
-        )
-        if (conversation.title.isNullOrBlank()) {
-            conversation.title = buildCodexConversationTitle(displayText, referencedFilePaths)
-        }
-        conversation.updatedTime = System.currentTimeMillis()
-        ConversationStore.updateConversation(project, conversation)
-        return conversation
-    }
-
-    private fun persistCodexCliUserTurn(
-        conversationId: String,
-        userMessageId: String,
-        displayText: String,
-        promptForMemory: String,
-        referencedFilePaths: List<String>,
-    ) {
-        JsonLineChatHistory(conversationId, project).add(
-            ChatHistoryUserMessage(
-                text = displayText.ifBlank { null },
-                messageId = userMessageId,
-                referencedFilePaths = referencedFilePaths,
-            )
-        )
-        JsonLineChatMemory(conversationId, getDefaultAgentId(), project).add(userMessage(promptForMemory))
-    }
-
-    private fun persistCodexCliAssistantTurn(
-        conversationId: String,
-        displayText: String,
-        referencedFilePaths: List<String>,
-        assistantText: String,
-        threadId: String?,
-    ): Conversation {
-        val conversation = ensureCodexConversation(conversationId, displayText, referencedFilePaths)
-        if (!threadId.isNullOrBlank()) {
-            conversation.codexThreadId = threadId
-        }
-        conversation.updatedTime = System.currentTimeMillis()
-        ConversationStore.updateConversation(project, conversation)
-        JsonLineChatHistory(conversationId, project).add(
-            ChatHistoryAssistantMessage(segments = mutableListOf(TextSegment(assistantText)))
-        )
-        JsonLineChatMemory(conversationId, getDefaultAgentId(), project).add(AiMessage(assistantText))
-        return conversation
-    }
-
-    private fun buildCodexConversationTitle(
-        displayText: String,
-        referencedFilePaths: List<String>,
-    ): String {
-        val titleSource = displayText.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.isNotBlank() && !it.startsWith("```") && it != "引用的代码上下文：" }
-            ?.take(36)
-            ?.trim()
-            .orEmpty()
-        if (titleSource.isNotBlank()) {
-            return if (titleSource.length < displayText.trim().length) "$titleSource..." else titleSource
-        }
-        return if (referencedFilePaths.isNotEmpty()) "文件讨论" else "Codex 会话"
     }
 
     // ── Conversation lifecycle ───────────────────────────────────────
@@ -783,6 +623,8 @@ class JarvisChatTabPanel(
         currentConversationId = convId
         clearAskState()
         clearAssociatedContextItems()
+        clearComposerCheckpointPanel()
+        assistantCards.clear()
         partialCards.clear()
         updateConversationHeader()
 
@@ -796,9 +638,15 @@ class JarvisChatTabPanel(
 
     private fun renderHistory(historyMessages: List<ChatHistoryMessage>) {
         messageContainer.removeAll()
+        assistantCards.clear()
         partialCards.clear()
         userMessageHeaders.clear()
+        val latestUserMessageId = historyMessages.asReversed()
+            .filterIsInstance<ChatHistoryUserMessage>()
+            .firstOrNull()
+            ?.messageId
         if (historyMessages.isEmpty()) {
+            clearComposerCheckpointPanel()
             showWelcome()
         } else {
             showConversation()
@@ -817,6 +665,7 @@ class JarvisChatTabPanel(
                     )
                 }
             }
+            refreshComposerCheckpointPanel(latestUserMessageId)
         }
         messageContainer.revalidate()
         messageContainer.repaint()
@@ -957,6 +806,7 @@ class JarvisChatTabPanel(
     private fun handleBuiltInCommand(command: String) {
         when (command.lowercase()) {
             "/clear" -> executeClearCommand()
+            "/new" -> executeNewCommand()
             "/compact" -> executeCompactCommand()
         }
     }
@@ -968,6 +818,11 @@ class JarvisChatTabPanel(
             runCatching { ConversationCommandService.resetConversation(tabId, convId, currentModelId, project) }
         }
         resetConversationUi()
+    }
+
+    private fun executeNewCommand() {
+        archiveCurrentConversation()
+        onArchiveConversation()
     }
 
     private fun executeCompactCommand() {
@@ -1010,6 +865,8 @@ class JarvisChatTabPanel(
         TaskState.clearCachedServices(tabId)
         currentConversationId = null
         pendingAsk = null
+        clearComposerCheckpointPanel()
+        assistantCards.clear()
         partialCards.clear()
         userMessageHeaders.clear()
         messageContainer.removeAll()
@@ -1020,6 +877,13 @@ class JarvisChatTabPanel(
         updateConversationHeader()
         showWelcome()
         updateComposerState()
+    }
+
+    private fun archiveCurrentConversation() {
+        val conversationId = currentConversationId ?: return
+        val conversation = ConversationStore.getConversation(project, conversationId) ?: return
+        conversation.updatedTime = System.currentTimeMillis()
+        ConversationStore.updateConversation(project, conversation)
     }
 
     private fun updateConversationHeader() {
@@ -1077,6 +941,23 @@ class JarvisChatTabPanel(
             is JarvisAsk -> "ask:${event.id}:${event.type}"
             else -> "message:${resolveMessageKey(event)}:${event.type}"
         }
+    }
+
+    private fun refreshComposerCheckpointPanel(messageId: String?) {
+        if (messageId.isNullOrBlank() || shouldHideComposerCheckpointPanel()) {
+            clearComposerCheckpointPanel()
+            return
+        }
+        val fileChanges = rollbackSupport.getPendingFileChanges(currentConversationId, messageId)
+        composerCheckpointRestorePanel.updateContent(messageId, fileChanges)
+    }
+
+    private fun clearComposerCheckpointPanel() {
+        composerCheckpointRestorePanel.clear()
+    }
+
+    private fun shouldHideComposerCheckpointPanel(): Boolean {
+        return false
     }
 
     private fun maybeInstallRollbackAction(header: JPanel, messageId: String?) {

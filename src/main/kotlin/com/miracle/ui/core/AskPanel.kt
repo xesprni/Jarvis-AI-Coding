@@ -14,6 +14,7 @@ import com.miracle.agent.parser.UiToolName
 import com.miracle.agent.parser.getToolSegmentHeader
 import com.miracle.agent.tool.RequestUserInputOutput
 import com.miracle.agent.tool.RequestUserInputQuestion
+import com.miracle.utils.UiUtil
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.FlowLayout
@@ -137,9 +138,10 @@ internal class AskPanel(
         }
         configureMode(mode)
         questionLabel.text = wrapHtml(ask.data.joinToString("<br>") { it.content.ifBlank { renderSegmentLabel(it) } })
-        inputField.text = ""
+        UiUtil.clearTextSafely(inputField)
         optionsPanel.removeAll()
         requestPanel.removeAll()
+        clearRequestAnswerFields()
         requestQuestions = emptyList()
         requestAnswerFields.clear()
 
@@ -170,7 +172,7 @@ internal class AskPanel(
             options.forEach { option ->
                 optionsPanel.add(
                     createOptionChipButton(option, "使用这个建议回复") {
-                        inputField.text = option
+                        setReplyText(option)
                         onReply(AskDecision.APPROVE, option)
                     }
                 )
@@ -201,7 +203,8 @@ internal class AskPanel(
         badgeLabel.text = ""
         questionLabel.text = ""
         helperLabel.text = ""
-        inputField.text = ""
+        UiUtil.clearTextSafely(inputField)
+        clearRequestAnswerFields()
         optionsPanel.removeAll()
         requestPanel.removeAll()
         requestQuestions = emptyList()
@@ -237,8 +240,12 @@ internal class AskPanel(
         }
     }
 
+    internal fun setReplyText(value: String) {
+        UiUtil.setTextSafely(inputField, value, moveCaretToEnd = true)
+    }
+
     internal fun setStructuredAnswer(questionId: String, value: String) {
-        requestAnswerFields[questionId]?.text = value
+        requestAnswerFields[questionId]?.let { UiUtil.setTextSafely(it, value, moveCaretToEnd = true) }
     }
 
     private fun renderSegmentLabel(segment: Segment): String {
@@ -305,7 +312,7 @@ internal class AskPanel(
             border = JBUI.Borders.emptyTop(8)
             question.options.forEach { option ->
                 add(createOptionChipButton(option.label, option.description) {
-                    field.text = option.label
+                    UiUtil.setTextSafely(field, option.label, moveCaretToEnd = true)
                 })
             }
         }
@@ -335,6 +342,10 @@ internal class AskPanel(
             JBUI.Borders.empty(4, 7),
         )
         field.maximumSize = Dimension(Int.MAX_VALUE, field.preferredSize.height)
+    }
+
+    private fun clearRequestAnswerFields() {
+        requestAnswerFields.values.forEach { UiUtil.clearTextSafely(it) }
     }
 
     private fun wrapHtml(text: String): String {

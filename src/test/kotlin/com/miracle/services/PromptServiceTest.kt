@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 class PromptServiceTest {
 
     @Test
-    fun planModeInstructionsShouldUseCodexStylePlanProtocol() {
+    fun planModeInstructionsShouldUsePlanProtocol() {
         val prompt = PromptService.buildPlanModeInstructions()
 
         assertTrue(prompt.contains("<proposed_plan>"))

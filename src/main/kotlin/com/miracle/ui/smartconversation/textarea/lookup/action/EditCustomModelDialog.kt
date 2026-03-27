@@ -10,7 +10,6 @@ import com.intellij.util.ui.JBUI
 import com.miracle.services.ModelApiStyle
 import com.miracle.services.ModelConfig
 import com.miracle.services.isCustomModelExists
-import com.miracle.services.requiresApiCredentials
 import java.awt.Dimension
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
@@ -98,14 +97,12 @@ class EditCustomModelDialog(
             return ValidationInfo("模型 '$modelName' 已存在", modelNameField)
         }
         val apiStyle = apiStyleComboBox.selectedItem as? ModelApiStyle ?: ModelApiStyle.CHAT_COMPLETIONS
-        if (apiStyle.requiresApiCredentials()) {
-            if (endpointField.text.trim().isBlank()) {
-                return ValidationInfo("请输入 API 地址", endpointField)
-            }
-            val newApiKey = String(apiKeyField.password).trim()
-            if (newApiKey.isBlank() && originalModel.apiKey.isNullOrBlank()) {
-                return ValidationInfo("请输入 API Key", apiKeyField)
-            }
+        if (endpointField.text.trim().isBlank()) {
+            return ValidationInfo("请输入 API 地址", endpointField)
+        }
+        val newApiKey = String(apiKeyField.password).trim()
+        if (newApiKey.isBlank() && originalModel.apiKey.isNullOrBlank()) {
+            return ValidationInfo("请输入 API Key", apiKeyField)
         }
         val contextTokens = contextTokensField.text.toIntOrNull()
         if (contextTokens == null || contextTokens <= 0) {
@@ -128,12 +125,16 @@ class EditCustomModelDialog(
     }
 
     private fun addRow(panel: JPanel, c: GridBagConstraints, row: Int, label: String, field: JComponent) {
+        addRow(panel, c, row, JBLabel(label), field)
+    }
+
+    private fun addRow(panel: JPanel, c: GridBagConstraints, row: Int, label: JComponent, field: JComponent) {
         val labelConstraints = c.clone() as GridBagConstraints
         labelConstraints.gridx = 0
         labelConstraints.gridy = row
         labelConstraints.weightx = 0.0
         labelConstraints.anchor = GridBagConstraints.WEST
-        panel.add(JBLabel(label), labelConstraints)
+        panel.add(label, labelConstraints)
 
         val fieldConstraints = c.clone() as GridBagConstraints
         fieldConstraints.gridx = 1
@@ -143,19 +144,7 @@ class EditCustomModelDialog(
     }
 
     private fun updateCredentialFieldState() {
-        val apiStyle = apiStyleComboBox.selectedItem as? ModelApiStyle ?: ModelApiStyle.CHAT_COMPLETIONS
-        val requiresCredentials = apiStyle.requiresApiCredentials()
-        endpointField.isEnabled = requiresCredentials
-        apiKeyField.isEnabled = requiresCredentials
-        endpointField.emptyText.text = if (requiresCredentials) {
-            "例如: https://api.openai.com/v1"
-        } else {
-            "Codex CLI 模式下不需要填写"
-        }
-        apiKeyField.toolTipText = if (requiresCredentials) {
-            "留空表示不修改已保存的 API Key"
-        } else {
-            "Codex CLI 使用本机 codex login 登录态"
-        }
+        endpointField.isEnabled = true
+        apiKeyField.isEnabled = true
     }
 }

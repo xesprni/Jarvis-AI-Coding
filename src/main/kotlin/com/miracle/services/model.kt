@@ -37,6 +37,8 @@ private var LOG = Logger.getInstance("com.miracle.services.model")
 private val json = Json {
     prettyPrint = true
     prettyPrintIndent = "  "
+    ignoreUnknownKeys = true
+    coerceInputValues = true
 }
 
 enum class ModelProvider(val code: String, val desc: String) {
@@ -52,13 +54,10 @@ enum class ModelProvider(val code: String, val desc: String) {
 @Serializable
 enum class ModelApiStyle(val desc: String) {
     CHAT_COMPLETIONS("Chat Completions"),
-    RESPONSES("Responses"),
-    CODEX_CLI("Codex CLI");
+    RESPONSES("Responses");
 
     override fun toString(): String = desc
 }
-
-fun ModelApiStyle.requiresApiCredentials(): Boolean = this != ModelApiStyle.CODEX_CLI
 
 private val REASONING_EFFORTS = setOf("low", "medium", "high", "xhigh")
 
@@ -74,7 +73,7 @@ data class ModelConfig(
     val contextTokens: Int, // 上下文最大token数
     val maxOutputTokens: Int? = null,  // 最大输出token
     val apiStyle: ModelApiStyle = ModelApiStyle.CHAT_COMPLETIONS,  // API 协议类型
-    val reasoningEffort: String? = null,  // reasoning effort，主要给 Codex/Responses 模型使用
+    val reasoningEffort: String? = null,  // reasoning effort，主要给 Responses 模型使用
     val supportsImages: Boolean = false,  // 是否支持图片
     @kotlinx.serialization.Transient
     var icon: Icon = AllIcons.Nodes.Plugin
@@ -83,16 +82,10 @@ data class ModelConfig(
         get() = "${provider}_${model}"
     val alias: String
         get() = _alias ?: model
-    val isCodexModel: Boolean
-        get() = model.contains("codex", ignoreCase = true) || alias.contains("codex", ignoreCase = true)
     val resolvedApiStyle: ModelApiStyle
-        get() = when {
-            apiStyle == ModelApiStyle.CODEX_CLI -> ModelApiStyle.CODEX_CLI
-            apiStyle == ModelApiStyle.CHAT_COMPLETIONS && isCodexModel -> ModelApiStyle.RESPONSES
-            else -> apiStyle
-        }
+        get() = apiStyle
     val resolvedReasoningEffort: String?
-        get() = normalizeReasoningEffort(reasoningEffort) ?: if (isCodexModel) "medium" else null
+        get() = normalizeReasoningEffort(reasoningEffort)
 
     companion object {
         fun from(
@@ -162,9 +155,6 @@ suspend fun chatCompletion(
 
 suspend fun getStreamChatModel(modelId: String): StreamingChatModel {
     val modelConfig = getModelConfig(modelId)
-    if (modelConfig.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
-        throw IllegalStateException("Codex CLI 模型不走内部 StreamingChatModel 链路")
-    }
     return buildStreamingChatModel(modelConfig)
 }
 
@@ -193,7 +183,8 @@ private fun loadCustomModelConfigs(): List<ModelConfig> {
             return emptyList()
         }
         val jsonText = modelFile.readText()
-        val models = Json.decodeFromString<List<ModelConfig>>(jsonText)
+            .replace("\"CODEX_CLI\"", "\"CHAT_COMPLETIONS\"")
+        val models = json.decodeFromString<List<ModelConfig>>(jsonText)
         return models.map { normalizeModelConfig(it) }
     }.getOrElse { emptyList() }
 }
@@ -359,9 +350,6 @@ private suspend fun getModelConfig(modelId: String): ModelConfig {
 
 suspend fun executeChatRequest(modelId: String, request: ChatRequest): ChatResponse {
     val modelConfig = getModelConfig(modelId)
-    if (modelConfig.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
-        return CodexCliService.completeChatRequest(modelConfig, request)
-    }
     val chatModel = buildChatModel(modelConfig)
     return if (chatModel != null) {
         chatModel.chat(request)
@@ -397,10 +385,6 @@ private fun buildStreamingChatModel(modelConfig: ModelConfig): StreamingChatMode
         modelConfig.resolvedReasoningEffort?.let(builder::reasoningEffort)
         modelConfig.maxOutputTokens?.let(builder::maxOutputTokens)
         return builder.build()
-    }
-
-    if (modelConfig.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
-        throw IllegalStateException("Codex CLI 模型不走内部流式模型")
     }
 
     val builder = OpenAiStreamingChatModel.builder()

@@ -14,6 +14,7 @@ import com.miracle.config.AutoApproveSettings
 import com.miracle.ui.core.ChatTagPaintUtil
 import com.miracle.ui.core.createRoundedBorder
 import com.miracle.ui.settings.mcp.components.McpUiComponents
+import com.miracle.utils.UiUtil
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Cursor
@@ -111,7 +112,7 @@ internal class AutoApproveSettingsPanel : JPanel(BorderLayout()) {
             maxRequestsSpinner.value = state.maxRequests
             blacklistValues.clear()
             blacklistValues.addAll(state.autoRunCommandsBlacklist)
-            blacklistInput.text = ""
+            UiUtil.clearTextSafely(blacklistInput)
             refreshBlacklistChips()
             updateVisualState()
         } finally {
@@ -351,13 +352,13 @@ internal class AutoApproveSettingsPanel : JPanel(BorderLayout()) {
         val value = blacklistInput.text.trim()
         if (value.isBlank()) return
         if (blacklistValues.add(value)) {
-            blacklistInput.text = ""
+            UiUtil.clearTextSafely(blacklistInput)
             refreshBlacklistChips()
             if (!syncing) {
                 persistState()
             }
         } else {
-            blacklistInput.text = ""
+            UiUtil.clearTextSafely(blacklistInput)
         }
     }
 
@@ -431,7 +432,7 @@ internal class AutoApproveSettingsPanel : JPanel(BorderLayout()) {
             maxRequestsSpinner.value = defaults.maxRequests
             blacklistValues.clear()
             blacklistValues.addAll(defaults.autoRunCommandsBlacklist)
-            blacklistInput.text = ""
+            UiUtil.clearTextSafely(blacklistInput)
             refreshBlacklistChips()
             updateVisualState()
         } finally {

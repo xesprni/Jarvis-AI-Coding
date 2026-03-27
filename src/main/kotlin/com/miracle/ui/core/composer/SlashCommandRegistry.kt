@@ -35,6 +35,12 @@ object SlashCommandRegistry {
             icon = AllIcons.Actions.Refresh,
         ),
         SlashCommand(
+            command = "/new",
+            description = "Archive the current conversation and open a new chat tab",
+            category = SlashCommandCategory.BUILT_IN,
+            icon = AllIcons.General.Add,
+        ),
+        SlashCommand(
             command = "/compact",
             description = "Summarize and compact the current conversation context",
             category = SlashCommandCategory.BUILT_IN,

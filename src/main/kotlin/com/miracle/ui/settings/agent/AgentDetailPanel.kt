@@ -16,6 +16,7 @@ import com.miracle.agent.mcp.McpClientHub
 import com.miracle.agent.mcp.McpConfigManager
 import com.miracle.agent.tool.ToolRegistry
 import com.miracle.utils.AgentConfig
+import com.miracle.utils.UiUtil
 import com.miracle.utils.getProjectConfigDirectory
 import com.miracle.utils.getUserConfigDirectory
 import kotlinx.coroutines.runBlocking
@@ -263,14 +264,14 @@ class AgentDetailPanel(
     }
 
     private fun loadAgent(agent: AgentConfig) {
-        nameField.text = agent.agentType
-        descArea.text = agent.whenToUse
+        UiUtil.setTextSafely(nameField, agent.agentType)
+        UiUtil.setTextSafely(descArea, agent.whenToUse)
         when (val tools = agent.tools) {
             is String -> setToolsSelection(if (tools.trim() == "*") listOf("*") else listOf(tools))
             is List<*> -> setToolsSelection(tools.filterIsInstance<String>())
             else -> setToolsSelection(emptyList())
         }
-        promptArea.text = agent.systemPrompt
+        UiUtil.setTextSafely(promptArea, agent.systemPrompt)
         setScopeSelection(
             when (agent.scope) {
                 AgentConfig.Scope.PROJECT -> SaveScope.PROJECT
@@ -429,10 +430,10 @@ class AgentDetailPanel(
 
                 // 在 UI 线程中填充表单
                 ApplicationManager.getApplication().invokeLater {
-                    nameField.text = generated.name
-                    descArea.text = generated.description
+                    UiUtil.setTextSafely(nameField, generated.name)
+                    UiUtil.setTextSafely(descArea, generated.description)
                     setToolsSelection(generated.tools)
-                    promptArea.text = generated.systemPrompt
+                    UiUtil.setTextSafely(promptArea, generated.systemPrompt)
                     setScopeSelection(SaveScope.PROJECT)
                     statusLabel.foreground = JBColor(0x1B8A4C, 0x6FCF97)
                     statusLabel.text = "已生成新的智能体草稿"

@@ -1,9 +1,12 @@
 package com.miracle.utils
 
+import com.github.difflib.DiffUtils
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -33,12 +36,29 @@ private data class FileSnapshotEntry(
     val filePath: String,
     val existed: Boolean,
     val snapshotFile: String? = null,
+    val restored: Boolean = false,
 )
 
 @Serializable
 private data class FileSnapshotManifest(
     val entries: List<FileSnapshotEntry> = emptyList(),
 )
+
+data class CheckpointFileChangeSummary(
+    val absolutePath: String,
+    val relativePath: String,
+    val addedLines: Int,
+    val deletedLines: Int,
+    val totalChangedLines: Int,
+    val isNewFile: Boolean,
+)
+
+private data class DiffStat(
+    val addedLines: Int,
+    val deletedLines: Int,
+) {
+    val totalChangedLines: Int = addedLines + deletedLines
+}
 
 object CheckpointStorage {
 
@@ -147,6 +167,46 @@ object CheckpointStorage {
     }
 
     @JvmStatic
+    fun hasRollbackCheckpoint(project: Project, convId: String, userMessageId: String): Boolean {
+        val messageDir = getMessageCheckpointDir(project, convId, userMessageId)
+        if (!messageDir.exists()) {
+            return false
+        }
+        return readJsonOrDefault(getFileManifestPath(project, convId, userMessageId), FileSnapshotManifest())
+            .entries
+            .isNotEmpty()
+    }
+
+    @JvmStatic
+    fun getPendingFileChangeSummaries(project: Project, convId: String, userMessageId: String): List<CheckpointFileChangeSummary> {
+        val manifestPath = getFileManifestPath(project, convId, userMessageId)
+        if (!manifestPath.exists()) {
+            return emptyList()
+        }
+        val snapshotsDir = getFileSnapshotsDir(project, convId, userMessageId)
+        return readJsonOrDefault(manifestPath, FileSnapshotManifest())
+            .entries
+            .filterNot { it.restored }
+            .mapNotNull { entry ->
+                runCatching {
+                    buildFileChangeSummary(project, snapshotsDir, entry)
+                }.onFailure {
+                    LOG.warn("Failed to build checkpoint summary for ${entry.filePath}", it)
+                }.getOrNull()
+            }
+            .filter { it.totalChangedLines > 0 }
+            .sortedBy { it.relativePath }
+    }
+
+    @JvmStatic
+    @Synchronized
+    fun restoreSingleFile(project: Project, convId: String, userMessageId: String, filePath: String): Boolean {
+        return runBlocking {
+            restoreSingleFileInternal(project, convId, userMessageId, filePath)
+        }
+    }
+
+    @JvmStatic
     fun restoreCheckpointAndContext(project: Project, convId: String, userMessageId: String): Boolean {
         return runBlocking {
             restoreCheckpointAndContextInternal(project, convId, userMessageId)
@@ -160,6 +220,25 @@ object CheckpointStorage {
         }
         restoreFileSnapshots(project, convId, userMessageId)
         restoreConversationContext(project, convId, userMessageId)
+        return true
+    }
+
+    private suspend fun restoreSingleFileInternal(project: Project, convId: String, userMessageId: String, filePath: String): Boolean {
+        val manifestPath = getFileManifestPath(project, convId, userMessageId)
+        if (!manifestPath.exists()) {
+            throw IllegalStateException("Checkpoint not found for message $userMessageId")
+        }
+        val normalizedPath = normalizeFilePath(filePath, project)
+        val manifest = readJsonOrDefault(manifestPath, FileSnapshotManifest())
+        val entry = manifest.entries.firstOrNull { it.filePath == normalizedPath }
+            ?: throw IllegalStateException("File checkpoint not found for $normalizedPath")
+
+        restoreFileEntry(project, getFileSnapshotsDir(project, convId, userMessageId), entry)
+
+        val updatedEntries = manifest.entries.map {
+            if (it.filePath == normalizedPath) it.copy(restored = true) else it
+        }
+        writeJson(manifestPath, FileSnapshotManifest(entries = updatedEntries))
         return true
     }
 
@@ -201,30 +280,7 @@ object CheckpointStorage {
         val snapshotsDir = getFileSnapshotsDir(project, convId, userMessageId)
         val manifest = readJsonOrDefault(manifestPath, FileSnapshotManifest())
         manifest.entries.forEach { entry ->
-            val targetFile = File(entry.filePath)
-            if (entry.existed) {
-                val snapshotName = entry.snapshotFile
-                    ?: throw IllegalStateException("Missing snapshot file name for ${entry.filePath}")
-                val snapshotPath = snapshotsDir / snapshotName
-                if (!snapshotPath.exists()) {
-                    throw IllegalStateException("Snapshot not found: ${snapshotPath.pathString}")
-                }
-                targetFile.parentFile?.mkdirs()
-                
-                // 使用 PSI 方式更新文件,让 IDE 正确刷新 editor
-                val content = snapshotPath.readText()
-                val psiFile = PsiFileUtils.findPsiFile(project, entry.filePath)
-                if (psiFile != null) {
-                    PsiFileUtils.updatePsiFileContent(psiFile, content, flush = true)
-                } else {
-                    // 如果文件不存在,创建新文件
-                    PsiFileUtils.createPsiFile(project, entry.filePath, content, flush = true)
-                }
-            } else if (targetFile.exists()) {
-                if (!targetFile.delete()) {
-                    throw IllegalStateException("Failed to delete file ${targetFile.path}")
-                }
-            }
+            restoreFileEntry(project, snapshotsDir, entry)
         }
     }
 
@@ -316,6 +372,103 @@ object CheckpointStorage {
 
     private fun getFileSnapshotsDir(project: Project, convId: String, userMessageId: String): Path {
         return getFilesDir(project, convId, userMessageId) / "snapshots"
+    }
+
+    private suspend fun restoreFileEntry(project: Project, snapshotsDir: Path, entry: FileSnapshotEntry) {
+        val targetFile = File(entry.filePath)
+        if (entry.existed) {
+            val snapshotName = entry.snapshotFile
+                ?: throw IllegalStateException("Missing snapshot file name for ${entry.filePath}")
+            val snapshotPath = snapshotsDir / snapshotName
+            if (!snapshotPath.exists()) {
+                throw IllegalStateException("Snapshot not found: ${snapshotPath.pathString}")
+            }
+            targetFile.parentFile?.mkdirs()
+
+            val content = snapshotPath.readText()
+            if (ApplicationManager.getApplication() == null) {
+                targetFile.writeText(content)
+                return
+            }
+            val psiFile = PsiFileUtils.findPsiFile(project, entry.filePath)
+            if (psiFile != null) {
+                PsiFileUtils.updatePsiFileContent(psiFile, content, flush = true)
+            } else {
+                PsiFileUtils.createPsiFile(project, entry.filePath, content, flush = true)
+            }
+            return
+        }
+
+        if (targetFile.exists() && !targetFile.delete()) {
+            throw IllegalStateException("Failed to delete file ${targetFile.path}")
+        }
+    }
+
+    private fun buildFileChangeSummary(
+        project: Project,
+        snapshotsDir: Path,
+        entry: FileSnapshotEntry,
+    ): CheckpointFileChangeSummary {
+        val snapshotContent = getSnapshotContent(snapshotsDir, entry)
+        val currentContent = getCurrentContent(entry.filePath)
+        val diffStat = calculateDiffStat(snapshotContent, currentContent)
+        val basePath = project.basePath
+        val relativePath = if (basePath.isNullOrBlank()) {
+            entry.filePath
+        } else {
+            toRelativePath(entry.filePath, basePath)
+        }
+        return CheckpointFileChangeSummary(
+            absolutePath = entry.filePath,
+            relativePath = relativePath,
+            addedLines = diffStat.addedLines,
+            deletedLines = diffStat.deletedLines,
+            totalChangedLines = diffStat.totalChangedLines,
+            isNewFile = !entry.existed,
+        )
+    }
+
+    private fun getSnapshotContent(snapshotsDir: Path, entry: FileSnapshotEntry): String {
+        if (!entry.existed) {
+            return ""
+        }
+        val snapshotName = entry.snapshotFile
+            ?: throw IllegalStateException("Missing snapshot file name for ${entry.filePath}")
+        val snapshotPath = snapshotsDir / snapshotName
+        if (!snapshotPath.exists()) {
+            throw IllegalStateException("Snapshot not found: ${snapshotPath.pathString}")
+        }
+        return snapshotPath.readText()
+    }
+
+    private fun getCurrentContent(filePath: String): String {
+        val targetFile = File(filePath)
+        if (!targetFile.exists() || !targetFile.isFile) {
+            return ""
+        }
+        return targetFile.readText()
+    }
+
+    private fun calculateDiffStat(snapshotContent: String, currentContent: String): DiffStat {
+        val patch = DiffUtils.diff(toDiffLines(snapshotContent), toDiffLines(currentContent))
+        var addedLines = 0
+        var deletedLines = 0
+        patch.deltas.forEach { delta ->
+            addedLines += delta.target.lines.size
+            deletedLines += delta.source.lines.size
+        }
+        return DiffStat(
+            addedLines = addedLines,
+            deletedLines = deletedLines,
+        )
+    }
+
+    private fun toDiffLines(content: String): List<String> {
+        val normalized = content.replace("\r\n", "\n").replace('\r', '\n')
+        if (normalized.isEmpty()) {
+            return emptyList()
+        }
+        return normalized.split('\n')
     }
 
     private fun cleanupEmptyCheckpointRoot(checkpointRoot: Path) {
