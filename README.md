@@ -165,16 +165,6 @@ src/
   - `com.miracle.ui.core.SettingsMenuPopupBuilder`
   - `com.miracle.ui.settings.*`
 
-## 当前不包含的能力
-
-本仓库当前刻意不包含以下模块：
-
-- 登录鉴权
-- 远程内网接口接入
-- 默认模型回退
-- MCP 市场
-- 编辑器代码自动补全
-- lowcode / app 模块
 
 ## 备注
 
