@@ -349,7 +349,7 @@ class JarvisChatTabPanel(
         clearAssociatedContextItems()
         clearAskState()
         updateConversationHeader()
-π
+
         val selectedChatMode = JarvisCoreSettings.getInstance().chatMode
         if (selectedModel.resolvedApiStyle == ModelApiStyle.CODEX_CLI) {
             startCodexCliConversation(
