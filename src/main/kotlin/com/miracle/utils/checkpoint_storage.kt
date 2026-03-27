@@ -200,6 +200,20 @@ object CheckpointStorage {
             .sortedBy { it.relativePath }
     }
 
+    /**
+     * Returns the snapshot (original) content for a given file, or `null` if the snapshot is not found.
+     */
+    @JvmStatic
+    fun getSnapshotContentForFile(project: Project, convId: String, userMessageId: String, filePath: String): String? {
+        val manifestPath = getFileManifestPath(project, convId, userMessageId)
+        if (!manifestPath.exists()) return null
+        val normalizedPath = normalizeFilePath(filePath, project)
+        val manifest = readJsonOrDefault(manifestPath, FileSnapshotManifest())
+        val entry = manifest.entries.firstOrNull { it.filePath == normalizedPath } ?: return null
+        val snapshotsDir = getFileSnapshotsDir(project, convId, userMessageId)
+        return runCatching { getSnapshotContent(snapshotsDir, entry) }.getOrNull()
+    }
+
     @JvmStatic
     @Synchronized
     fun restoreSingleFile(project: Project, convId: String, userMessageId: String, filePath: String): Boolean {

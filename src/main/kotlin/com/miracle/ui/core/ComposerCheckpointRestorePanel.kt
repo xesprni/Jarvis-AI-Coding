@@ -19,6 +19,7 @@ import javax.swing.JPanel
 internal class ComposerCheckpointRestorePanel(
     private val onRestoreAll: (messageId: String) -> Unit,
     private val onRestoreFile: (messageId: String, filePath: String) -> Unit,
+    private val onDiffFile: (messageId: String, filePath: String) -> Unit,
 ) : JPanel(BorderLayout()) {
 
     private var currentMessageId: String? = null
@@ -125,6 +126,7 @@ internal class ComposerCheckpointRestorePanel(
             font = JBFont.small()
             foreground = ChatTheme.MUTED_FOREGROUND
             border = JBUI.Borders.emptyLeft(8)
+            minimumSize = preferredSize
         }
         val restoreButton: JButton = createOptionChipButton(
             text = "\u8FD8\u539F",
@@ -133,14 +135,33 @@ internal class ComposerCheckpointRestorePanel(
             currentMessageId?.let { onRestoreFile(it, summary.absolutePath) }
         }.apply { applySmallChipBorder() }
 
-        return JPanel().apply {
+        val diffButton: JButton = createOptionChipButton(
+            text = "Diff",
+            tooltip = "\u67E5\u770B\u6B64\u6587\u4EF6\u7684\u5DEE\u5F02",
+        ) {
+            currentMessageId?.let { onDiffFile(it, summary.absolutePath) }
+        }.apply { applySmallChipBorder() }
+
+        val infoPanel = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.X_AXIS)
             isOpaque = false
-            alignmentX = Component.LEFT_ALIGNMENT
             add(pathLabel)
             add(statLabel)
-            add(Box.createHorizontalGlue())
+        }
+
+        val buttonPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            add(diffButton)
+            add(Box.createHorizontalStrut(JBUI.scale(4)))
             add(restoreButton)
+        }
+
+        return JPanel(BorderLayout()).apply {
+            isOpaque = false
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(infoPanel, BorderLayout.CENTER)
+            add(buttonPanel, BorderLayout.EAST)
         }
     }
 

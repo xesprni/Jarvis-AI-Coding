@@ -180,6 +180,11 @@ class JarvisChatTabPanel(
                 }
             }
         },
+        onDiffFile = { messageId, filePath ->
+            currentConversationId?.let { conversationId ->
+                showCheckpointDiff(conversationId, messageId, filePath)
+            }
+        },
     )
     private val composerHeaderPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -874,11 +879,10 @@ class JarvisChatTabPanel(
 
     private fun executePlanCommand() {
         switchChatMode(ChatMode.PLAN)
-        if (composerField.expandedText().trim().isBlank()) {
-            composerField.applyInsertion(
-                ChatComposerInsertion.PlainText("\u8BF7\u5E2E\u6211\u89C4\u5212\u4EE5\u4E0B\u4EFB\u52A1\uFF1A")
-            )
-        }
+        composerField.clearComposer()
+        composerField.applyInsertion(
+            ChatComposerInsertion.PlainText("\u8BF7\u5E2E\u6211\u89C4\u5212\u4EE5\u4E0B\u4EFB\u52A1\uFF1A")
+        )
         requestFocusForInput()
     }
 
@@ -977,6 +981,32 @@ class JarvisChatTabPanel(
 
     private fun clearComposerCheckpointPanel() {
         composerCheckpointRestorePanel.clear()
+    }
+
+    private fun showCheckpointDiff(conversationId: String, messageId: String, filePath: String) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val snapshotContent = runCatching {
+                com.miracle.utils.CheckpointStorage.getSnapshotContentForFile(project, conversationId, messageId, filePath)
+            }.getOrNull() ?: ""
+            val currentContent = java.io.File(filePath).let { if (it.exists()) it.readText() else "" }
+            val fileName = java.io.File(filePath).name
+            val fileType = com.intellij.openapi.fileTypes.FileTypeManager.getInstance().getFileTypeByFileName(fileName)
+
+            ApplicationManager.getApplication().invokeLater {
+                val leftContent = com.intellij.diff.DiffContentFactory.getInstance()
+                    .create(project, snapshotContent, fileType)
+                val rightContent = com.intellij.diff.DiffContentFactory.getInstance()
+                    .create(project, currentContent, fileType)
+                val request = com.intellij.diff.requests.SimpleDiffRequest(
+                    fileName,
+                    leftContent,
+                    rightContent,
+                    "\u539F\u59CB\u7248\u672C",
+                    "\u5F53\u524D\u7248\u672C",
+                )
+                com.intellij.diff.DiffManager.getInstance().showDiff(project, request)
+            }
+        }
     }
 
     private fun shouldHideComposerCheckpointPanel(): Boolean {
