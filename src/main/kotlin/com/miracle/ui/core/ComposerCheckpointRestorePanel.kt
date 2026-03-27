@@ -26,13 +26,12 @@ internal class ComposerCheckpointRestorePanel(
     private var expanded: Boolean = false
 
     private val summaryLabel = JBLabel().apply {
-        font = JBFont.small().asBold()
+        font = JBFont.small()
     }
     private val toggleLabel = JBLabel()
-    private val restoreAllButton = createActionButton(
+    private val restoreAllButton = createOptionChipButton(
         text = "\u5168\u90E8\u8FD8\u539F",
         tooltip = "\u5C06\u672C\u8F6E\u6240\u6709\u6587\u4EF6\u8FD8\u539F\u5230\u4FEE\u6539\u524D",
-        primary = false,
     ) {
         currentMessageId?.let(onRestoreAll)
     }.apply {
@@ -42,7 +41,7 @@ internal class ComposerCheckpointRestorePanel(
     private val detailsPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         isOpaque = false
-        border = JBUI.Borders.emptyBottom(8)
+        border = JBUI.Borders.emptyBottom(4)
         isVisible = false
         alignmentX = Component.LEFT_ALIGNMENT
     }
@@ -52,7 +51,7 @@ internal class ComposerCheckpointRestorePanel(
         isOpaque = false
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         add(toggleLabel)
-        add(Box.createHorizontalStrut(JBUI.scale(6)))
+        add(Box.createHorizontalStrut(JBUI.scale(4)))
         add(summaryLabel)
     }
 
@@ -69,7 +68,7 @@ internal class ComposerCheckpointRestorePanel(
         background = ChatTheme.PLAN_CARD_SURFACE_BACKGROUND
         border = BorderFactory.createCompoundBorder(
             createRoundedBorder(ChatTheme.PLAN_ACTION_SECONDARY_BORDER),
-            JBUI.Borders.empty(8, 10),
+            JBUI.Borders.empty(4, 8),
         )
         alignmentX = Component.LEFT_ALIGNMENT
         add(detailsPanel, BorderLayout.CENTER)
@@ -105,7 +104,7 @@ internal class ComposerCheckpointRestorePanel(
         currentFiles.forEachIndexed { index, summary ->
             detailsPanel.add(createRow(summary))
             if (index < currentFiles.lastIndex) {
-                detailsPanel.add(Box.createVerticalStrut(JBUI.scale(6)))
+                detailsPanel.add(Box.createVerticalStrut(JBUI.scale(3)))
             }
         }
     }

@@ -2,8 +2,10 @@ package com.miracle.utils
 
 import com.github.difflib.DiffUtils
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.writeAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -399,8 +401,17 @@ object CheckpointStorage {
             return
         }
 
-        if (targetFile.exists() && !targetFile.delete()) {
-            throw IllegalStateException("Failed to delete file ${targetFile.path}")
+        if (targetFile.exists()) {
+            if (ApplicationManager.getApplication() != null) {
+                val vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(entry.filePath)
+                if (vFile != null) {
+                    writeAction { vFile.delete(this) }
+                    return
+                }
+            }
+            if (!targetFile.delete()) {
+                throw IllegalStateException("Failed to delete file ${targetFile.path}")
+            }
         }
     }
 

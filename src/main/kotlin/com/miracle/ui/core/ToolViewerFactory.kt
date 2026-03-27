@@ -192,6 +192,7 @@ internal class ToolViewerFactory(
                     isEditable = false; isOpaque = false; lineWrap = true; wrapStyleWord = true
                     foreground = JBColor(Color(120, 120, 120), Color(170, 170, 170))
                     border = JBUI.Borders.emptyBottom(8); font = JBFont.small()
+                    alignmentX = Component.LEFT_ALIGNMENT
                 })
             }
             items.forEach { item -> add(createListItemLabel(segment, item)) }

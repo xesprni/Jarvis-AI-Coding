@@ -23,6 +23,8 @@ import com.miracle.agent.TaskState
 import com.miracle.agent.parser.ErrorSegment
 import com.miracle.agent.parser.ProposedPlanSegment
 import com.miracle.agent.parser.TextSegment
+import com.miracle.agent.parser.ToolSegment
+import com.miracle.agent.parser.UiToolName
 import com.miracle.agent.parser.Segment
 import com.miracle.agent.tool.ToolRegistry
 import com.miracle.config.JarvisCoreSettings
@@ -162,7 +164,7 @@ class JarvisChatTabPanel(
     private val composerCheckpointRestorePanel = ComposerCheckpointRestorePanel(
         onRestoreAll = { messageId ->
             currentConversationId?.let { conversationId ->
-                rollbackSupport.rollback(conversationId, messageId, activeTask) {
+                rollbackSupport.rollback(conversationId, messageId, activeTask, ::stopActiveTask) {
                     if (currentConversationId == conversationId) {
                         loadConversation(conversationId)
                     }
@@ -171,7 +173,7 @@ class JarvisChatTabPanel(
         },
         onRestoreFile = { messageId, filePath ->
             currentConversationId?.let { conversationId ->
-                rollbackSupport.restoreFile(conversationId, messageId, filePath, activeTask) {
+                rollbackSupport.restoreFile(conversationId, messageId, filePath, activeTask, ::stopActiveTask) {
                     if (currentConversationId == conversationId) {
                         refreshComposerCheckpointPanel(messageId)
                     }
@@ -183,7 +185,6 @@ class JarvisChatTabPanel(
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         isOpaque = false
         alignmentX = Component.LEFT_ALIGNMENT
-        add(composerCheckpointRestorePanel)
         add(associatedContextHeader)
     }
     private val sendButton = createIconButton(SEND_ICON, "\u53D1\u9001")
@@ -318,6 +319,7 @@ class JarvisChatTabPanel(
         return ChatPromptPanel.create(
             inputComponent = composerField,
             headerComponent = composerHeaderPanel,
+            checkpointPanel = composerCheckpointRestorePanel,
             askPanel = askPanel,
             modelComboBox = modelComboBox,
             chatModeComboBox = chatModeComboBox,
@@ -482,10 +484,20 @@ class JarvisChatTabPanel(
             }
             else -> addOrUpdateAssistantCard(resolveMessageKey(event), event.data, event.isPartial, event.type)
         }
+        if (!event.isPartial && isFileModifyingEvent(event)) {
+            refreshComposerCheckpointPanel(activeTask?.userMessageId)
+        }
         if (wasFollowing) {
             scrollManager.scrollToBottom(force = true)
         } else {
             scrollManager.restoreViewportSnapshot(preservedViewport)
+        }
+    }
+
+    private fun isFileModifyingEvent(event: AgentMessage): Boolean {
+        if (event.type != AgentMessageType.TOOL) return false
+        return event.data.any { segment ->
+            segment is ToolSegment && (segment.name == UiToolName.EDITED_EXISTING_FILE || segment.name == UiToolName.NEW_FILE_CREATED)
         }
     }
 
@@ -968,7 +980,7 @@ class JarvisChatTabPanel(
         header.add(Box.createHorizontalStrut(JBUI.scale(6)), header.componentCount.coerceAtLeast(1))
         header.add(
             createHeaderTextButton("\u56DE\u9000\u672C\u6B21\u6539\u52A8", "\u56DE\u9000\u672C\u8F6E\u4EA7\u751F\u7684\u6587\u4EF6\u6539\u52A8") {
-                rollbackSupport.rollback(currentConversationId, messageId, activeTask) {
+                rollbackSupport.rollback(currentConversationId, messageId, activeTask, ::stopActiveTask) {
                     loadConversation(currentConversationId!!)
                 }
             },

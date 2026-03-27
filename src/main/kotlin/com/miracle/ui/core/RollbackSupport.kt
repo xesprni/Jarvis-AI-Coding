@@ -47,11 +47,10 @@ internal class RollbackSupport(
         conversationId: String?,
         messageId: String,
         activeTask: Task?,
+        stopTask: () -> Unit,
         onComplete: () -> Unit,
     ) {
-        if (!ensureTaskStopped(activeTask)) {
-            return
-        }
+        ensureTaskStopped(activeTask, stopTask)
 
         val convId = conversationId ?: return
         val changedFiles = CheckpointStorage.getChangedFiles(project, convId, messageId)
@@ -93,11 +92,10 @@ internal class RollbackSupport(
         messageId: String,
         filePath: String,
         activeTask: Task?,
+        stopTask: () -> Unit,
         onComplete: () -> Unit,
     ) {
-        if (!ensureTaskStopped(activeTask)) {
-            return
-        }
+        ensureTaskStopped(activeTask, stopTask)
 
         val convId = conversationId ?: return
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -120,11 +118,9 @@ internal class RollbackSupport(
         }
     }
 
-    private fun ensureTaskStopped(activeTask: Task?): Boolean {
-        if (activeTask == null) {
-            return true
+    private fun ensureTaskStopped(activeTask: Task?, stopTask: () -> Unit) {
+        if (activeTask != null) {
+            stopTask()
         }
-        Messages.showInfoMessage(project, "\u8BF7\u5148\u505C\u6B62\u5F53\u524D\u4EFB\u52A1\u540E\u518D\u6267\u884C\u56DE\u9000\u3002", "\u56DE\u9000\u672C\u6B21\u6539\u52A8")
-        return false
     }
 }

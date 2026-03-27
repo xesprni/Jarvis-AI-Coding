@@ -30,6 +30,7 @@ internal object ChatPromptPanel {
     fun create(
         inputComponent: JComponent,
         headerComponent: JComponent,
+        checkpointPanel: JComponent,
         askPanel: AskPanel,
         modelComboBox: JComboBox<*>,
         chatModeComboBox: JComboBox<*>,
@@ -77,10 +78,18 @@ internal object ChatPromptPanel {
             add(JPanel(BorderLayout()).apply {
                 isOpaque = false
                 border = JBUI.Borders.emptyTop(askPanel.spacingTop())
-                add(RoundedComposerPanel().apply {
-                    add(headerComponent, BorderLayout.NORTH)
-                    add(inputComponent, BorderLayout.CENTER)
-                    add(footerRow, BorderLayout.SOUTH)
+                add(JPanel(BorderLayout()).apply {
+                    isOpaque = false
+                    add(JPanel(BorderLayout()).apply {
+                        isOpaque = false
+                        border = JBUI.Borders.empty(0, JBUI.scale(16), JBUI.scale(4), JBUI.scale(16))
+                        add(checkpointPanel, BorderLayout.CENTER)
+                    }, BorderLayout.NORTH)
+                    add(RoundedComposerPanel().apply {
+                        add(headerComponent, BorderLayout.NORTH)
+                        add(inputComponent, BorderLayout.CENTER)
+                        add(footerRow, BorderLayout.SOUTH)
+                    }, BorderLayout.CENTER)
                 }, BorderLayout.CENTER)
             }, BorderLayout.CENTER)
         }
