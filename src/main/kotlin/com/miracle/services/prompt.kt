@@ -11,8 +11,16 @@ import git4idea.repo.GitRepositoryManager
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+/**
+ * 提示词服务，负责构建和管理 AI 助手的系统提示词
+ */
 object PromptService {
 
+    /**
+     * 构建通用系统提示词，包含 AI 助手的基本行为规范和环境信息
+     *
+     * @return 通用系统提示词文本
+     */
     internal fun buildCommonSystemPrompt(): String {
         return """
         You are Jarvis, a local in-IDE AI coding assistant. Always respond in Chinese, unless the user explicitly requests another language.
@@ -54,6 +62,11 @@ object PromptService {
         """.trimIndent()
     }
 
+    /**
+     * 构建执行模式（Agent 模式）的指令提示词
+     *
+     * @return 执行模式指令文本
+     */
     internal fun buildExecutionModeInstructions(): String {
         return """
         # Task Management
@@ -88,6 +101,11 @@ object PromptService {
         """.trimIndent()
     }
 
+    /**
+     * 构建规划模式（Plan 模式）的指令提示词
+     *
+     * @return 规划模式指令文本
+     */
     internal fun buildPlanModeInstructions(): String {
         return """
         # Plan Mode
@@ -110,14 +128,12 @@ object PromptService {
     }
 
     /**
-     * 需要替换的变量格式为：{{VAR}}
-     * 目前支持：
-     * - CWD: 项目当前目录
-     * - IS_GIT_REPO: 项目是否是git仓库
-     * - PLATFORM: 操作系统
-     * - OS_VERSION: 操作系统版本
-     * - DATE: 当前日期，格式为YYYY-MM-DD
-     * - MODEL_NAME: 当前模型名称
+     * 格式化提示词模板，将占位变量替换为实际值
+     *
+     * @param prompt 包含占位变量的提示词模板
+     * @param modelId 模型 ID，用于获取模型名称
+     * @param project 当前项目
+     * @return 替换变量后的提示词文本
      */
     suspend fun formatPrompt(prompt: String, modelId: String, project: Project): String {
         val models = loadModelConfigs()
@@ -137,6 +153,15 @@ object PromptService {
             .replace("{{MODEL_NAME}}", modelName)
     }
 
+    /**
+     * 获取完整的系统提示词，由通用提示词、模式指令和 MCP 提示词拼接而成
+     *
+     * @param modelId 模型 ID
+     * @param project 当前项目
+     * @param chatMode 聊天模式，默认为 Agent 模式
+     * @param convId 会话 ID，可选
+     * @return 完整的系统提示词文本
+     */
     suspend fun getSystemPrompt(modelId: String, project: Project, chatMode: ChatMode = ChatMode.AGENT, convId: String? = null): String {
         val modelConfig = loadModelConfigs()[modelId]
         val commonPrompt = formatPrompt(buildCommonSystemPrompt(), modelId, project)

@@ -14,6 +14,17 @@ import dev.langchain4j.memory.ChatMemory
 import kotlin.collections.isNotEmpty
 import kotlin.collections.joinToString
 
+/**
+ * 系统提醒消息数据类，用于在对话中注入系统级别的提示信息
+ *
+ * @param role 消息角色，通常为 "system"
+ * @param content 消息内容
+ * @param isMeta 是否为元信息消息
+ * @param timestamp 消息时间戳
+ * @param type 提醒类型
+ * @param priority 优先级，取值为 'low'、'medium' 或 'high'
+ * @param category 分类，取值为 'task'、'security'、'performance' 或 'general'
+ */
 data class ReminderMessage(
     val role: String = "system",
     val content: String,
@@ -25,7 +36,9 @@ data class ReminderMessage(
 )
 
 
-// -------------------- Event --------------------
+/**
+ * 提醒事件枚举，定义系统中所有可触发的提醒事件类型
+ */
 enum class ReminderEvent(val value: String) {
     TODO_CHANGED("todo:changed"),
     TODO_FILE_CHANGED("todo:file_changed"),
@@ -35,6 +48,7 @@ enum class ReminderEvent(val value: String) {
     ASK_MODEL_MENTIONED("ask-model:mentioned"),
     ;
 
+    /** 会话启动时的上下文信息 */
     data class SessionStartupContext(
         var agentId: String? = null,
         var messages: Int? = null,
@@ -42,10 +56,12 @@ enum class ReminderEvent(val value: String) {
         var context: Map<String, String>? = null,
     )
 
+    /** TODO 变更事件的上下文 */
     data class TodoChangedContext(
         val agentId: String
     )
 
+    /** TODO 文件外部变更事件的上下文 */
     data class TodoFileChangedContext(
         var agentId: String? = null,
         val filePath: String,
@@ -53,6 +69,7 @@ enum class ReminderEvent(val value: String) {
         val timestamp: Long,
     )
 
+    /** 外部注入提醒事件的上下文 */
     data class ReminderInjectedContext(
         val reminder: String,
         val agentId: String,
@@ -60,18 +77,21 @@ enum class ReminderEvent(val value: String) {
         val timestamp: Long,
     )
 
+    /** Agent 被提及事件的上下文 */
     data class AgentMentionedContext(
         val agentType: String,
         val originalMention: String,
         val timestamp: Long,
     )
 
+    /** 文件被提及事件的上下文 */
     data class FileMentionedContext(
         val filePath: String,
         val originalMention: String,
         val timestamp: Long,
     )
 
+    /** 文件读取事件的上下文 */
     data class FileReadContext(
         val filePath: String,
         val timestamp: Long,
@@ -79,6 +99,7 @@ enum class ReminderEvent(val value: String) {
         var modified: Long,
     )
 
+    /** 文件编辑事件的上下文 */
     data class FileEditedContext(
         val filePath: String,
         val timestamp: Long,
@@ -86,6 +107,7 @@ enum class ReminderEvent(val value: String) {
         var source: String,
     )
 
+    /** 指定模型被提及事件的上下文 */
     data class AskModelMentionedContext(
         val modelName: String,
         val originalMention: String,
@@ -99,9 +121,13 @@ enum class ReminderEvent(val value: String) {
  */
 class SystemReminderService(private val convId: String, private val agentId: String, private val project: Project) {
 
+    /** 提醒消息缓存 */
     private val reminderCache: MutableMap<String, ReminderMessage> = HashMap()
+    /** 已发送过的提醒键集合，用于去重 */
     private val remindersSent: MutableSet<String> = mutableSetOf()
+    /** 事件分发器，存储事件名到回调列表的映射 */
     private val eventDispatcher: MutableMap<String, MutableList<(Any) -> Unit>> = HashMap()
+    /** 当前聊天模式 */
     var chatMode: ChatMode = ChatMode.AGENT
 
     companion object {
@@ -115,6 +141,11 @@ class SystemReminderService(private val convId: String, private val agentId: Str
         setupEventDispatcher()
     }
 
+    /**
+     * 生成当前会话的提醒消息列表，最多返回 5 条
+     *
+     * @return 提醒消息列表
+     */
     fun generateReminders(): List<ReminderMessage> {
         val reminders = mutableListOf<ReminderMessage>()
 
@@ -135,7 +166,11 @@ class SystemReminderService(private val convId: String, private val agentId: Str
         return reminders
     }
 
-    // -------------------- 事件派发方法 --------------------
+    /**
+     * 派发 TODO 相关的提醒事件，返回缓存中的或新生成的 TODO 提醒
+     *
+     * @return TODO 相关的提醒消息，无需提醒时返回 null
+     */
     private fun dispatchTodoEvent(): ReminderMessage? {
         if (TODO_CHANGED_KEY in reminderCache) {
             remindersSent.add(TODO_CHANGED_KEY)
@@ -178,8 +213,9 @@ class SystemReminderService(private val convId: String, private val agentId: Str
     }
 
     /**
-     * Retrieve cached mention reminders
-     * Returns recent mentions (within 5 seconds) that haven't expired
+     * 获取缓存中的提及提醒消息，仅返回 5 秒内的未过期提醒
+     *
+     * @return 有效的提及提醒消息列表
      */
     private fun getMentionReminders(): List<ReminderMessage> {
         val currentTime = System.currentTimeMillis()
@@ -204,6 +240,11 @@ class SystemReminderService(private val convId: String, private val agentId: Str
         return reminders
     }
 
+    /**
+     * 获取规划模式的提醒消息，仅在首次进入规划模式时生成
+     *
+     * @return 规划模式提醒消息列表，已提醒过时返回 null
+     */
     private fun getPlanModeReminder(): List<ReminderMessage>? {
         if (chatMode != ChatMode.PLAN) return null
         if (!remindersSent.contains(PLAN_MODE_KEY)) {
@@ -225,15 +266,26 @@ When the spec is decision-complete, include exactly one <proposed_plan>...</prop
     }
 
     /**
-     * Type guard for mention reminders - centralized type checking
-     * Eliminates hardcoded type strings scattered throughout the code
+     * 判断提醒消息是否为提及类型（agent/file/ask_model）
+     *
+     * @param reminder 待判断的提醒消息
+     * @return 是否为提及类型的提醒
      */
     private fun isMentionReminder(reminder: ReminderMessage): Boolean {
         val mentionTypes = setOf("agent_mention", "file_mention", "ask_model_mention")
         return mentionTypes.contains(reminder.type)
     }
 
-    // -------------------- 工具方法 --------------------
+    /**
+     * 创建提醒消息，统一包装为 system-reminder 格式
+     *
+     * @param type 提醒类型
+     * @param category 提醒分类
+     * @param priority 优先级
+     * @param content 提醒内容
+     * @param timestamp 时间戳，默认为当前时间
+     * @return 构建好的提醒消息
+     */
     private fun createReminderMessage(type: String, category: String, priority: String, content: String, timestamp: Long = System.currentTimeMillis()): ReminderMessage {
         return ReminderMessage(
             role = "system",
@@ -247,8 +299,14 @@ When the spec is decision-complete, include exactly one <proposed_plan>...</prop
     }
 
     /**
-     * Unified mention reminder creation - eliminates duplicate logic
-     * Centralizes reminder creation with consistent deduplication
+     * 统一的提及提醒创建方法，内置去重逻辑
+     *
+     * @param type 提醒类型
+     * @param key 去重键，已存在时跳过创建
+     * @param category 提醒分类
+     * @param priority 优先级
+     * @param content 提醒内容
+     * @param timestamp 时间戳
      */
     private fun createMentionReminder(type: String, key: String, category: String, priority: String, content: String, timestamp: Long) {
         if (!remindersSent.add(key)) return
@@ -262,16 +320,30 @@ When the spec is decision-complete, include exactly one <proposed_plan>...</prop
         reminderCache[key] = reminder
     }
 
+    /**
+     * 重置会话状态，清空提醒缓存和已发送记录
+     */
     fun resetSession() {
         reminderCache.clear()
         remindersSent.clear()
     }
 
-    // -------------------- 事件系统 --------------------
+    /**
+     * 注册事件监听器
+     *
+     * @param event 事件名称
+     * @param callback 事件回调函数
+     */
     fun addEventListener(event: String, callback: (Any) -> Unit) {
         eventDispatcher.computeIfAbsent(event) { mutableListOf() }.add(callback)
     }
 
+    /**
+     * 触发指定事件，通知所有注册的监听器
+     *
+     * @param event 事件名称
+     * @param context 事件上下文数据
+     */
     fun emitEvent(event: String, context: Any) {
         eventDispatcher[event]?.forEach {
             try {
@@ -282,6 +354,9 @@ When the spec is decision-complete, include exactly one <proposed_plan>...</prop
         }
     }
 
+    /**
+     * 初始化事件分发器，注册各类事件的监听器
+     */
     private fun setupEventDispatcher() {
         // Todo change events
         addEventListener(ReminderEvent.TODO_CHANGED.value) { context ->
@@ -330,7 +405,9 @@ When the spec is decision-complete, include exactly one <proposed_plan>...</prop
     }
 
     /**
-     * Inject a system reminder into messages
+     * 将系统提醒注入到聊天消息中，包括提醒内容和项目规则文件
+     *
+     * @param chatMemory 聊天消息存储，用于读写对话历史
      */
     fun injectSystemReminder(chatMemory: ChatMessageStore<ChatMessage>) {
         // 1. 获取 System Reminder
@@ -352,7 +429,10 @@ When the spec is decision-complete, include exactly one <proposed_plan>...</prop
     }
 
     /**
-     * 将 Content 注入到UserMessage中 (放在已有消息之前)
+     * 将内容注入到 UserMessage 中，放在已有消息内容之前
+     *
+     * @param contents 要注入的内容列表
+     * @param chatMemory 聊天消息存储，用于读写对话历史
      */
     private fun injectContentToUserMessage(contents: List<Content>, chatMemory: ChatMessageStore<ChatMessage>) {
         if (contents.isEmpty()) return

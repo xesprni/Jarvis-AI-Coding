@@ -33,6 +33,13 @@ internal class AssistantMessageCard(
     private var lastPartial: Boolean = false
     private var thoughtPanel: ThoughtProcessPanel? = null
 
+        /**
+     * 更新消息卡片的内容，支持流式（partial）更新。
+     *
+     * @param segments 消息段列表
+     * @param type 消息类型
+     * @param partial 是否为流式部分更新
+     */
     fun updateContent(segments: List<Segment>, type: AgentMessageType, partial: Boolean) {
         val normalizedSegments = renderer.normalizeSegmentsForDisplay(segments)
         lastSegments = normalizedSegments
@@ -80,6 +87,9 @@ internal class AssistantMessageCard(
         shell.root.repaint()
     }
 
+    /**
+     * 如果当前处于流式更新状态，将其标记为已完成。
+     */
     fun finishPartialIfNeeded() {
         if (lastPartial) {
             updateContent(lastSegments, lastType, false)
@@ -91,6 +101,7 @@ internal class AssistantMessageCard(
  * Collapsible panel showing the AI's "thinking" process.
  */
 internal class ThoughtProcessPanel : JPanel(BorderLayout()) {
+        /** 思维过程文本是否已完成 */
     private var finished: Boolean = false
     private val contentPane = JarvisMarkdownRenderUtil.createHtmlPane("", false).apply {
         foreground = MUTED_FOREGROUND
@@ -126,6 +137,9 @@ internal class ThoughtProcessPanel : JPanel(BorderLayout()) {
         add(contentWrapper, BorderLayout.CENTER)
     }
 
+    /**
+     * 标记思维过程为已完成状态，更新按钮文本并折叠面板。
+     */
     fun setFinished() {
         if (finished) return
         finished = true
@@ -133,6 +147,11 @@ internal class ThoughtProcessPanel : JPanel(BorderLayout()) {
         toggleButton.isSelected = false
     }
 
+    /**
+     * 更新思维过程面板的文本内容。
+     *
+     * @param text 要显示的文本
+     */
     fun updateText(text: String) {
         contentPane.text = JarvisMarkdownRenderUtil.convertMarkdownToHtml(text)
     }

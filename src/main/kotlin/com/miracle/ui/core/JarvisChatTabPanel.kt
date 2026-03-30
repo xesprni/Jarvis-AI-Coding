@@ -83,6 +83,17 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.JViewport
 
+/**
+ * 聊天标签页面板，封装了单次会话的完整交互逻辑，包括消息渲染、用户输入、
+ * 模型选择、Agent 事件处理、会话历史加载和回滚等功能。
+ *
+ * @param project 当前项目实例
+ * @param tabId 标签页唯一标识
+ * @param initialConversationId 初始会话 ID，为空时显示欢迎页
+ * @param onTitleChanged 标题变更回调
+ * @param onOpenConversation 打开会话回调
+ * @param onArchiveConversation 归档会话回调
+ */
 class JarvisChatTabPanel(
     private val project: Project,
     private val tabId: String,
@@ -93,10 +104,13 @@ class JarvisChatTabPanel(
 ) : JPanel(BorderLayout()), Disposable {
 
     private companion object {
+        /** 流式渲染的最小间隔时间（毫秒） */
         const val STREAM_RENDER_INTERVAL_MS = 200L
+        /** 回滚操作在 header 中的客户端属性键 */
         const val ROLLBACK_ACTION_KEY = "jarvis.rollback.action"
     }
 
+    /** 输入框状态枚举，表示空闲、运行中或等待用户回复 */
     private enum class ComposerState {
         IDLE,
         RUNNING,
@@ -105,12 +119,19 @@ class JarvisChatTabPanel(
 
     // ── Coroutine & task state ───────────────────────────────────────
     private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 当前活跃的 Agent 任务 */
     private var activeTask: Task? = null
+    /** 当前活跃的协程任务 */
     private var activeJob: Job? = null
+    /** 当前会话 ID */
     private var currentConversationId: String? = initialConversationId
+    /** 当前待处理的 Ask 请求 */
     private var pendingAsk: JarvisAsk? = null
+    /** 已完成的助手消息卡片映射 */
     private val assistantCards = linkedMapOf<String, AssistantMessageCard>()
+    /** 正在流式输出的助手消息卡片映射 */
     private val partialCards = linkedMapOf<String, AssistantMessageCard>()
+    /** 用户消息的头部面板映射，用于安装回滚操作 */
     private val userMessageHeaders = linkedMapOf<String, JPanel>()
 
     // ── Extracted collaborators ──────────────────────────────────────
@@ -229,10 +250,20 @@ class JarvisChatTabPanel(
 
     // ── Public API ───────────────────────────────────────────────────
 
+    /**
+     * 将纯文本追加到输入框中。
+     *
+     * @param text 要追加的文本
+     */
     fun appendToInput(text: String) {
         appendInsertion(ChatComposerInsertion.PlainText(text))
     }
 
+    /**
+     * 将插入内容应用到输入框中。
+     *
+     * @param insertion 要应用的插入内容
+     */
     fun appendInsertion(insertion: ChatComposerInsertion) {
         ApplicationManager.getApplication().invokeLater {
             composerField.applyInsertion(insertion)
@@ -240,6 +271,11 @@ class JarvisChatTabPanel(
         }
     }
 
+    /**
+     * 追加一个关联文件到上下文中。
+     *
+     * @param path 文件路径
+     */
     fun appendAssociatedFile(path: String) {
         if (path.isBlank()) return
         ApplicationManager.getApplication().invokeLater {
@@ -248,6 +284,11 @@ class JarvisChatTabPanel(
         }
     }
 
+    /**
+     * 追加一个代码选区到关联上下文中。
+     *
+     * @param selection 代码选区项
+     */
     fun appendAssociatedCodeSelection(selection: AssociatedContextItem.AssociatedCodeSelection) {
         ApplicationManager.getApplication().invokeLater {
             addAssociatedContextItem(selection)
@@ -255,12 +296,18 @@ class JarvisChatTabPanel(
         }
     }
 
+    /**
+     * 请求输入框获得焦点。
+     */
     fun requestFocusForInput() {
         ApplicationManager.getApplication().invokeLater {
             composerField.requestComposerFocus()
         }
     }
 
+    /**
+     * 刷新模型选择下拉框的选项列表。
+     */
     fun refreshModels() {
         val models = getCustomModels()
         val items = models.map { ModelItem(it.id, it.alias) }
@@ -274,6 +321,11 @@ class JarvisChatTabPanel(
         updateConversationHeader()
     }
 
+    /**
+     * 显示历史会话弹窗。
+     *
+     * @param anchor 弹窗锚点组件，默认为当前面板
+     */
     fun showHistoryPopup(anchor: Component = this) {
         HistoryPopupBuilder(project).show(
             anchor = anchor,
@@ -294,6 +346,9 @@ class JarvisChatTabPanel(
 
     // ── Center panel (welcome / chat cards) ──────────────────────────
 
+    /**
+     * 创建中央面板，包含欢迎页和聊天页的卡片布局。
+     */
     private fun createCenterPanel(): JComponent {
         centerPanel.isOpaque = true
         centerPanel.background = PANEL_BACKGROUND
@@ -304,6 +359,9 @@ class JarvisChatTabPanel(
 
     // ── Prompt / composer panel ──────────────────────────────────────
 
+    /**
+     * 创建底部输入面板，包括模型选择器、聊天模式选择器和发送/停止按钮。
+     */
     private fun createPromptPanel(): JComponent {
         styleSelectorComboBox(modelComboBox)
         modelComboBox.renderer = ModelItemRenderer()
@@ -342,6 +400,9 @@ class JarvisChatTabPanel(
         handlePrimaryAction()
     }
 
+    /**
+     * 处理主操作（发送消息），根据当前状态决定是发送新消息还是回复 Ask 请求。
+     */
     private fun handlePrimaryAction() {
         if (pendingAsk != null) {
             handleAskReply()
@@ -433,6 +494,9 @@ class JarvisChatTabPanel(
         updateComposerState()
     }
 
+    /**
+     * 处理 Ask 回复，验证输入并提交响应给活跃任务。
+     */
     private fun handleAskReply() {
         val ask = pendingAsk ?: return
         askPanel.validateReply(ask)?.let { message ->

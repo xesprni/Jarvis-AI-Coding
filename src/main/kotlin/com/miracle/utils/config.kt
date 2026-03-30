@@ -71,6 +71,11 @@ fun getUserConfigDirectory(): String {
     return configDir
 }
 
+/**
+ * 获取项目级配置目录路径
+ * @param project 当前项目，为 null 时使用当前活跃项目
+ * @return 项目配置目录路径
+ */
 fun getProjectConfigDirectory(project: Project? = null): String {
     val basePath = project?.basePath ?: getCurrentProjectRootPath()
     val configDir = "$basePath${File.separator}.jarvis"
@@ -78,18 +83,32 @@ fun getProjectConfigDirectory(project: Project? = null): String {
     return configDir
 }
 
+/**
+ * 获取插件二进制文件目录路径
+ * @return bin 目录路径
+ */
 fun getJarvisBinDirectory(): String {
     val jarvisBinDir = "${PathManager.getPluginsPath()}${File.separator}chatx-expert${File.separator}bin"
     File(jarvisBinDir).mkdirs()
     return jarvisBinDir
 }
 
+/**
+ * 获取聊天记录存储目录路径
+ * @return 聊天记录目录路径
+ */
 fun getChatDirectory(): String {
     val configDir = Path(getUserConfigDirectory()) / "intellij-chat-v2"
     configDir.createDirectories()
     return configDir.pathString
 }
 
+/**
+ * 获取计划存储目录路径
+ * @param project 当前项目，为 null 时使用当前活跃项目
+ * @param convId 会话 ID，为 null 时使用 "default"
+ * @return 计划存储目录路径
+ */
 fun getPlanDirectory(project: Project? = null, convId: String? = null): String {
     val projectName = project?.name ?: "default-project"
     val planDir = Path(getChatDirectory()) / sanitizeFileName(projectName) / (convId ?: "default")
@@ -97,4 +116,5 @@ fun getPlanDirectory(project: Project? = null, convId: String? = null): String {
     return planDir.pathString
 }
 
+/** MCP 配置子目录名 */
 const val MCP_CONFIG_DIRECTORY = "mcp"

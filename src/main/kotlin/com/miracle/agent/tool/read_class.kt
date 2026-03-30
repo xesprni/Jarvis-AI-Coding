@@ -20,15 +20,21 @@ import dev.langchain4j.model.chat.request.json.JsonRawSchema
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.reflect.KFunction
 
+/**
+ * ReadClass 工具的输出结果
+ */
 data class ReadClassToolOutput(
-    val fqn: String,
-    val content: String,
-    val startLine: Int,
+    val fqn: String, // 类的完全限定名
+    val content: String, // 类文件内容
+    val startLine: Int, // 起始行号（1-based）
 )
 
+/**
+ * Java 类源码读取工具，通过完全限定名（FQN）读取类的源码定义
+ */
 object ReadClassTool: Tool<ReadClassToolOutput> {
 
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("ReadClass")
         .description("""Read the source definition of a Java class or interface by its fully qualified name (`FQN`), similar to reading a file from the workspace.
 The returned text contains the class definition, including imports, fields, methods, and implementations if available.
@@ -55,20 +61,42 @@ Usage:
             .build())
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<ReadClassToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: ReadClassToolOutput): String {
         var result = addLineNumbers(output.content, output.startLine)
         result = truncateToCharBudget(result)
         return result
     }
 
+    /**
+     * 执行类源码读取操作
+     * @param taskState 当前任务状态
+     * @param fqn 类的完全限定名
+     * @param offset 起始行号（1-based），默认从开头读取
+     * @param limit 读取的最大行数
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(
         taskState: TaskState,
         fqn: String,
@@ -103,6 +131,11 @@ Usage:
         return ToolCallResult("result", data, resultForAssistant)
     }
 
+    /**
+     * 工具结果添加后的回调，更新 UI 展示片段的内容
+     * @param data 工具输出数据
+     * @param taskState 当前任务状态
+     */
     override suspend fun afterAddToolResult(data: Any?, taskState: TaskState) {
         val output = data as? ReadClassToolOutput ?: return
         val segments = taskState.historyAiMessage.segments
@@ -113,6 +146,14 @@ Usage:
         }
     }
 
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,
@@ -138,6 +179,14 @@ Usage:
         )
     }
 
+    /**
+     * 构建 ReadClass 工具的 UI 展示片段
+     * @param taskState 当前任务状态
+     * @param fqn 类的完全限定名
+     * @param output 读取工具输出
+     * @param limit 行数限制
+     * @return 工具展示片段
+     */
     private fun renderToolSegment(
         taskState: TaskState,
         fqn: String,

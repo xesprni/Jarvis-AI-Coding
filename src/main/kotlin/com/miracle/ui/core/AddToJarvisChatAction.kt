@@ -6,6 +6,9 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.Messages
 
+/**
+ * 编辑器右键菜单操作，将选中的代码文本发送到 Jarvis 聊天面板。
+ */
 class AddToJarvisChatAction : AnAction("发送选中内容到 Jarvis"), DumbAware {
     override fun update(e: AnActionEvent) {
         val project = e.project

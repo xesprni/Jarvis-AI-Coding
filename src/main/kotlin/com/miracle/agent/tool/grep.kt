@@ -17,16 +17,19 @@ import kotlinx.serialization.json.*
 import java.io.File
 import kotlin.reflect.KFunction
 
+/**
+ * Grep 工具的输出结果
+ */
 data class GrepToolOutput(
-    val numFiles: Int,
-    val filenames: List<String>,
-    val mode: String = "files_with_matches",  // 'content' | 'files_with_matches' | 'count'
-    val content: String? = null,
-    val numLines: Int? = null,
-    val numMatches: Int? = null,
-    val appliedOffset: Int? = null,
-    val appliedLimit: Int? = null,
-    val durationMs: Long,
+    val numFiles: Int, // 匹配的文件数量
+    val filenames: List<String>, // 匹配的文件路径列表
+    val mode: String = "files_with_matches", // 输出模式：'content' | 'files_with_matches' | 'count'
+    val content: String? = null, // 内容模式下的搜索结果
+    val numLines: Int? = null, // 匹配的行数
+    val numMatches: Int? = null, // 匹配的总次数
+    val appliedOffset: Int? = null, // 应用的偏移量
+    val appliedLimit: Int? = null, // 应用的结果限制数
+    val durationMs: Long, // 执行耗时（毫秒）
 )
 
 /**
@@ -35,7 +38,7 @@ data class GrepToolOutput(
 object GrepTool : Tool<GrepToolOutput> {
 
 	private val LOG = Logger.getInstance(GrepTool::class.java)
-	private const val MAX_RESULT_CHARS = 20_000
+	private const val MAX_RESULT_CHARS = 20_000 // 返回给 AI 的最大字符数
 
 	val SPEC = ToolSpecification.builder()
 		.name("Grep")
@@ -70,14 +73,27 @@ object GrepTool : Tool<GrepToolOutput> {
 			.build())
 		.build()
 
+    /**
+     * 获取工具规格定义
+     * @return Grep 工具的规格定义
+     */
 	override fun getToolSpecification(): ToolSpecification {
 		return SPEC
 	}
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
 	override fun getExecuteFunc(): KFunction<ToolCallResult<GrepToolOutput>> {
 		return ::execute
 	}
 
+    /**
+     * 将工具输出渲染为返回给 AI 的文本
+     * @param output Grep 搜索结果
+     * @return 格式化后的结果文本
+     */
 	override fun renderResultForAssistant(output: GrepToolOutput): String {
 		val pagination = formatPagination(output.appliedLimit, output.appliedOffset)
 		return when (output.mode) {
@@ -101,6 +117,15 @@ object GrepTool : Tool<GrepToolOutput> {
 		}
 	}
 
+    /**
+     * 构建 Grep 工具的 UI 展示片段
+     * @param pattern 搜索模式
+     * @param path 搜索路径
+     * @param outputMode 输出模式
+     * @param taskState 当前任务状态
+     * @param output Grep 工具输出（可为 null 表示搜索未完成）
+     * @return 工具展示片段
+     */
     fun renderToolSegment(pattern: String, path: String?, outputMode: String, taskState: TaskState, output: GrepToolOutput?): ToolSegment {
         val content = output?.let {
             buildString {
@@ -167,6 +192,14 @@ object GrepTool : Tool<GrepToolOutput> {
         return segment
     }
 
+    /**
+     * 处理工具参数流式返回，构建 UI 展示片段
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段
+     */
 	override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         if (isPartial) return null
 
@@ -176,6 +209,11 @@ object GrepTool : Tool<GrepToolOutput> {
         return renderToolSegment(pattern, path, outputMode, taskState, null)
 	}
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
 	override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
 		val jsonObject = input as? JsonObject ?: throw ToolParameterException("Input must be a JSON object")
 		val path = jsonObject["path"]?.jsonPrimitive?.contentOrNull
@@ -187,6 +225,25 @@ object GrepTool : Tool<GrepToolOutput> {
 		}
 	}
 
+    /**
+     * 执行 Grep 搜索
+     * @param pattern 正则表达式搜索模式
+     * @param path 搜索路径
+     * @param glob 文件过滤 glob 模式
+     * @param output_mode 输出模式
+     * @param `-B` 匹配行前显示行数
+     * @param `-A` 匹配行后显示行数
+     * @param `-C` 匹配行前后显示行数
+     * @param `-n` 是否显示行号
+     * @param `-i` 是否忽略大小写
+     * @param type 文件类型过滤
+     * @param offset 结果偏移量
+     * @param head_limit 结果数量限制
+     * @param multiline 是否启用多行匹配模式
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
 	suspend fun execute(
 		pattern: String,
 		path: String? = null,
@@ -296,6 +353,13 @@ object GrepTool : Tool<GrepToolOutput> {
         )
 	}
 
+    /**
+     * 对搜索结果进行分页处理
+     * @param items 待分页的列表
+     * @param limit 每页数量限制
+     * @param offset 偏移量
+     * @return 分页后的列表
+     */
     private fun paginate(items: List<String>, limit: Int?, offset: Int?): List<String> {
         val offset = offset ?: 0
         var items = items
@@ -304,11 +368,22 @@ object GrepTool : Tool<GrepToolOutput> {
         return items
     }
 
+    /**
+     * 格式化分页参数为字符串
+     * @param limit 数量限制
+     * @param offset 偏移量
+     * @return 格式化的分页字符串
+     */
 	private fun formatPagination(limit: Int?, offset: Int?): String {
 		if (limit == null && offset == null) return ""
 		return "limit=$limit, offset=${offset ?: 0}"
 	}
 
+    /**
+     * 将文本截断到字符预算内，超长时截断末尾并添加提示
+     * @param text 原始文本
+     * @return 截断后的文本
+     */
 	private fun truncateToCharBudget(text: String): String {
 		if (text.length <= MAX_RESULT_CHARS) return text
 		val head = text.take(MAX_RESULT_CHARS)

@@ -22,21 +22,21 @@ import kotlin.reflect.KFunction
  * 继承者/实现者信息
  */
 data class InheritorInfo(
-    val fqn: String,
-    val type: String,
-    val source: String,
-    val isAbstract: Boolean
+    val fqn: String, // 类的完全限定名
+    val type: String, // 类型（class/interface/enum/annotation）
+    val source: String, // 来源（project/dependency）
+    val isAbstract: Boolean // 是否为抽象类
 )
 
 /**
  * 工具输出数据
  */
 data class ListImplementationsOutput(
-    val targetFqn: String,
-    val targetType: String,
-    val inheritors: List<InheritorInfo>,
-    val truncated: Boolean,
-    val durationMs: Long
+    val targetFqn: String, // 目标类型的完全限定名
+    val targetType: String, // 目标类型（class/interface/enum）
+    val inheritors: List<InheritorInfo>, // 继承者/实现者列表
+    val truncated: Boolean, // 结果是否被截断
+    val durationMs: Long // 查询耗时（毫秒）
 )
 
 /**
@@ -119,11 +119,14 @@ fun listImplementations(project: Project, fqn: String): ListImplementationsOutpu
     )
 }
 
+/**
+ * 查找给定类型的所有继承者/实现者的工具
+ */
 object ListImplementationsTool : Tool<ListImplementationsOutput> {
     
-    const val DEFAULT_LIMIT = 100
+    const val DEFAULT_LIMIT = 100 // 默认返回结果数量上限
     
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("ListImplementations")
         .description("""List all known inheritors of a given Java type.
 
@@ -151,14 +154,27 @@ Notes:
             .build())
         .build()
     
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
     
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<ListImplementationsOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: ListImplementationsOutput): String {
         if (output.inheritors.isEmpty()) {
             return "No inheritors found for ${output.targetFqn}."
@@ -186,6 +202,13 @@ Notes:
         return sb.toString().trim()
     }
     
+    /**
+     * 执行查找类继承者/实现者操作
+     * @param taskState 当前任务状态
+     * @param fqn 目标类型的完全限定名
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(
         taskState: TaskState,
         fqn: String,
@@ -215,6 +238,14 @@ Notes:
         return ToolCallResult("result", data, resultForAssistant)
     }
     
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,
@@ -227,6 +258,13 @@ Notes:
         return renderToolSegment(fqn, taskState, null)
     }
     
+    /**
+     * 构建 ListImplementations 工具的 UI 展示片段
+     * @param fqn 目标类型的完全限定名
+     * @param taskState 当前任务状态
+     * @param output 工具输出（可为 null 表示搜索未完成）
+     * @return 工具展示片段
+     */
     private fun renderToolSegment(
         fqn: String,
         taskState: TaskState,

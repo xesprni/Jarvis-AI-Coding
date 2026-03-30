@@ -19,10 +19,17 @@ import git4idea.repo.GitRepositoryManager
 import java.io.File
 import java.io.StringWriter
 
+/**
+ * Git 操作工具类，提供 Git 仓库信息查询和 Diff 生成功能
+ */
 object GitUtil {
 
     private val logger = thisLogger()
 
+    /**
+     * 从 Windows 注册表中查找 Git Bash 的安装路径
+     * @return bash.exe 的绝对路径，未找到时返回 null
+     */
     fun findGitBashPathFromRegistry(): String? {
         val regCmd = arrayOf("reg", "query", "HKLM\\SOFTWARE\\GitForWindows", "/v", "InstallPath")
         val process = ProcessBuilder(*regCmd).start()
@@ -40,6 +47,10 @@ object GitUtil {
         }
     }
 
+    /**
+     * 通过 PATH 环境变量查找 Git Bash 的安装路径
+     * @return bash.exe 的绝对路径，未找到时返回 null
+     */
     fun findGitBashPathFromPath(): String? {
         return try {
             val process = ProcessBuilder("where", "git")
@@ -80,6 +91,11 @@ object GitUtil {
         }
     }
 
+    /**
+     * 获取项目对应的 Git 仓库
+     * @param project 当前项目
+     * @return GitRepository 实例，未找到时返回 null
+     */
     @Throws(VcsException::class)
     @JvmStatic
     fun getProjectRepository(project: Project): GitRepository? {
@@ -89,6 +105,11 @@ object GitUtil {
             ?: repositoryManager.repositories.firstOrNull()
     }
 
+    /**
+     * 获取项目 Git 仓库的根目录路径
+     * @param project 当前项目
+     * @return Git 根目录路径，未找到时返回 null
+     */
     @JvmStatic
     fun getGitRoot(project: Project): String? {
         val repositoryManager = project.service<GitRepositoryManager>()
@@ -96,6 +117,11 @@ object GitUtil {
         return repositories.firstOrNull()?.let { return it.root.path }
     }
 
+    /**
+     * 获取当前未提交的变更 Diff（Unified 格式）
+     * @param project 当前项目
+     * @return Diff 字符串，最多返回 16000 字符
+     */
     fun getCurrentChanges(project: Project): String? {
         try {
             val repoRootPath = project.basePath?.toNioPathOrNull() ?: return null
@@ -124,6 +150,13 @@ object GitUtil {
         }
     }
 
+    /**
+     * 根据哈希列表获取 Git 提交详情
+     * @param project 当前项目
+     * @param repository Git 仓库
+     * @param commitHashes 提交哈希列表
+     * @return 匹配的 GitCommit 列表
+     */
     @Throws(VcsException::class)
     fun getCommitsForHashes(
         project: Project,
@@ -142,6 +175,13 @@ object GitUtil {
         return result
     }
 
+    /**
+     * 获取指定提交的 Diff 内容
+     * @param project 当前项目
+     * @param gitRepository Git 仓库
+     * @param commitHash 提交哈希
+     * @return 过滤后的 Diff 行列表
+     */
     @Throws(VcsException::class)
     fun getCommitDiffs(
         project: Project,
@@ -160,6 +200,12 @@ object GitUtil {
         return filterDiffOutput(commandResult.output)
     }
 
+    /**
+     * 遍历仓库中的所有提交
+     * @param project 当前项目
+     * @param repository Git 仓库
+     * @param onVisit 提交访问回调
+     */
     @Throws(VcsException::class)
     fun visitRepositoryCommits(
         project: Project,
@@ -173,6 +219,14 @@ object GitUtil {
         }
     }
 
+    /**
+     * 获取仓库中最近的提交列表
+     * @param project 当前项目
+     * @param repository Git 仓库
+     * @param searchText 搜索关键词，可匹配哈希或提交消息
+     * @param limit 最大返回数量，默认 250
+     * @return 匹配的 GitCommit 列表
+     */
     @Throws(VcsException::class)
     fun getAllRecentCommits(
         project: Project,
@@ -202,6 +256,11 @@ object GitUtil {
         return result
     }
 
+    /**
+     * 过滤 Diff 输出，移除元数据行
+     * @param output 原始 Diff 行列表
+     * @return 过滤后的行列表
+     */
     private fun filterDiffOutput(output: List<String>): List<String> {
         return output.filter {
             !it.startsWith("diff --git") &&
@@ -213,6 +272,11 @@ object GitUtil {
         }
     }
 
+    /**
+     * 清理 Diff 字符串，移除不必要的行
+     * @param showContext 是否保留上下文行
+     * @return 清理后的 Diff 字符串
+     */
     private fun String.cleanDiff(showContext: Boolean = false): String =
         lineSequence()
             .filterNot { line ->

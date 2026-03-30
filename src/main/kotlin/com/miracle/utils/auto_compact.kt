@@ -13,6 +13,7 @@ import dev.langchain4j.model.output.TokenUsage
 import kotlin.math.max
 import kotlin.math.roundToInt
 
+/** 自动上下文压缩的触发阈值比例 */
 private var LOG = Logger.getInstance("com.miracle.utils.auto_compact")
 /**
  * Threshold ratio for triggering automatic context compression
@@ -24,10 +25,16 @@ const val AUTO_COMPACT_THRESHOLD_RATIO = 0.8
  * Retrieves the context length for the main model that should execute compression
  * Uses ModelManager to get the current model's context length
  */
+/**
+ * 获取指定模型的上下文长度限制
+ * @param modelId 模型标识
+ * @return 上下文 Token 数量上限
+ */
 suspend fun getCompressionModelContextLimit(modelId: String): Int {
     return loadModelConfigs()[modelId]?.contextTokens ?: 128_000
 }
 
+/** 上下文压缩提示词模板 */
 const val COMPRESSION_PROMPT = """Please provide a comprehensive summary of our conversation structured as follows:
 
 ## Technical Context
@@ -75,7 +82,15 @@ Focus on information essential for continuing the conversation effectively, incl
  * @param toolUseContext Execution context with model and tool configuration
  * @returns Updated messages (compressed if needed) and compression status
  */
-data class AutoCompactResult(val messages: List<ChatMessage>, val wasCompacted: Boolean)
+/**
+ * 自动压缩结果
+ */
+data class AutoCompactResult(
+    /** 压缩后的消息列表 */
+    val messages: List<ChatMessage>,
+    /** 是否执行了压缩操作 */
+    val wasCompacted: Boolean
+)
 suspend fun checkAutoCompact(modelId: String, messages: List<ChatMessage>, taskState: TaskState): AutoCompactResult {
     if (!shouldAutoCompact(modelId, messages)) return AutoCompactResult(messages, false)
     return try {
@@ -92,6 +107,13 @@ suspend fun checkAutoCompact(modelId: String, messages: List<ChatMessage>, taskS
     }
 }
 
+/**
+ * 强制执行上下文压缩，不进行阈值检查
+ * @param modelId 模型标识
+ * @param messages 当前消息列表
+ * @param taskState 任务状态
+ * @return 压缩结果
+ */
 suspend fun forceCompact(modelId: String, messages: List<ChatMessage>, taskState: TaskState): AutoCompactResult {
     val compactedMessages = executeAutoCompact(modelId, messages, taskState)
     return AutoCompactResult(compactedMessages, true)

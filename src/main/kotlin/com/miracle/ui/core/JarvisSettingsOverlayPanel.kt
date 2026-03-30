@@ -29,13 +29,23 @@ import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
+/**
+ * Jarvis 设置覆盖面板，在工具窗口中以覆盖层的形式展示各设置分区。
+ *
+ * @param project 当前项目实例
+ * @param parentDisposable 父级可释放资源
+ * @param onBack 返回回调
+ * @param onModelsChanged 模型列表变更回调
+ */
 class JarvisSettingsOverlayPanel(
     private val project: Project,
     private val parentDisposable: Disposable,
     private val onBack: () -> Unit,
     private val onModelsChanged: () -> Unit,
 ) : JPanel(BorderLayout()) {
+    /** MCP 状态面板，懒加载 */
     private val mcpStatusPanel = McpStatusPanel(project, parentDisposable)
+    /** 设置分区组件缓存，避免重复创建 */
     private val componentCache = linkedMapOf<JarvisSettingsSection, JComponent>()
 
     private val iconLabel = JLabel().apply {
@@ -72,6 +82,11 @@ class JarvisSettingsOverlayPanel(
         add(contentHost, BorderLayout.CENTER)
     }
 
+    /**
+     * 显示指定设置分区的内容。
+     *
+     * @param section 要显示的设置分区
+     */
     internal fun showSection(section: JarvisSettingsSection) {
         titleLabel.text = section.title
         descriptionLabel.text = section.description

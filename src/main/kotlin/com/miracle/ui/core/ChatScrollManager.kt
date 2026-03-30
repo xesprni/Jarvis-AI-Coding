@@ -17,6 +17,11 @@ import javax.swing.Scrollable
 import javax.swing.SwingUtilities
 import java.awt.BorderLayout
 
+/**
+ * 视口快照数据类，保存滚动位置信息。
+ *
+ * @property point 视口位置点
+ */
 // ── Data class to snapshot viewport state ────────────────────────────
 internal data class ViewportSnapshot(val point: Point)
 
@@ -30,7 +35,9 @@ internal class ChatScrollManager(
     private val messageScrollPane: JScrollPane,
     private val messageContainer: JPanel,
 ) {
+    /** 是否跟随最新输出自动滚动到底部 */
     var followLatestOutput = true
+    /** 是否为程序化触发的滚动（非用户手动操作） */
     var programmaticScroll = false
 
     /** Install adjustment and resize listeners on the scroll pane. */
@@ -49,11 +56,21 @@ internal class ChatScrollManager(
         })
     }
 
+    /**
+     * 检查当前滚动位置是否接近底部。
+     *
+     * @return 如果接近底部返回 true
+     */
     fun isNearBottom(): Boolean {
         val vertical = messageScrollPane.verticalScrollBar
         return vertical.value + vertical.model.extent >= vertical.maximum - JBUI.scale(72)
     }
 
+    /**
+     * 滚动到底部，可选择是否强制滚动。
+     *
+     * @param force 是否强制滚动（忽略自动跟随状态），默认 false
+     */
     fun scrollToBottom(force: Boolean = false) {
         if (!force && !followLatestOutput) return
         if (force) followLatestOutput = true
@@ -69,12 +86,22 @@ internal class ChatScrollManager(
         }
     }
 
+    /**
+     * 捕获当前视口的滚动位置快照。
+     *
+     * @return 视口快照，如果处于跟随状态则返回 null
+     */
     fun captureViewportSnapshot(): ViewportSnapshot? {
         if (followLatestOutput) return null
         val viewport = messageScrollPane.viewport
         return ViewportSnapshot(point = Point(viewport.viewPosition))
     }
 
+    /**
+     * 恢复之前捕获的视口快照位置。
+     *
+     * @param snapshot 要恢复的视口快照，为 null 时不执行操作
+     */
     fun restoreViewportSnapshot(snapshot: ViewportSnapshot?) {
         if (snapshot == null) return
         programmaticScroll = true
@@ -194,6 +221,9 @@ internal class ChatScrollManager(
 
 /**
  * A JPanel implementing [Scrollable] to ensure the message column tracks viewport width.
+ */
+/**
+ * 实现 Scrollable 接口的消息列表面板，确保面板宽度跟随视口宽度。
  */
 internal class MessageColumnPanel : JPanel(), Scrollable {
     init {

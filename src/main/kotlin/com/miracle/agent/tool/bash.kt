@@ -16,13 +16,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 import kotlin.reflect.KFunction
 
+/**
+ * Bash 命令执行工具的输出结果
+ */
 data class BashToolOutput(
-    val stdout: String,
-    val stdoutLines: Int,
-    val stderr: String,
-    val stderrLines: Int,
-    val interrupted: Boolean,
-    val exitCode: Int
+    val stdout: String, // 标准输出内容
+    val stdoutLines: Int, // 标准输出行数
+    val stderr: String, // 标准错误内容
+    val stderrLines: Int, // 标准错误行数
+    val interrupted: Boolean, // 命令是否被中断
+    val exitCode: Int // 退出码
 )
 
 /**
@@ -31,10 +34,11 @@ data class BashToolOutput(
 object BashTool : Tool<BashToolOutput> {
 
     val LOG = thisLogger()
-    const val MAX_OUTPUT_LENGTH = 30000
-    const val MAX_RENDERED_LINES = 20
+    const val MAX_OUTPUT_LENGTH = 30000 // 单次输出最大字符数
+    const val MAX_RENDERED_LINES = 20 // UI 渲染最大行数
     const val DEFAULT_TIMEOUT = 120000L // 2 minutes
     const val MAX_TIMEOUT = 600000L // 10 minutes
+    // 被禁止执行的命令列表
     private val BANNED_COMMANDS = listOf(
         "rm", "rmdir", "del", "format", "fdisk", "mkfs",
         "shutdown", "reboot", "halt", "poweroff",
@@ -99,14 +103,27 @@ Usage notes:
             .build())
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return Bash 工具的规格定义
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<BashToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出渲染为返回给 AI 的文本
+     * @param output Bash 命令执行结果
+     * @return 格式化后的结果文本
+     */
     override fun renderResultForAssistant(output: BashToolOutput): String {
         val stdout = output.stdout.trim()
         val stderr = output.stderr.trim()
@@ -124,6 +141,15 @@ Usage notes:
         }
     }
 
+    /**
+     * 执行 Bash 命令
+     * @param command 要执行的命令
+     * @param timeout 超时时间（毫秒）
+     * @param description 命令描述
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(command: String, timeout: Long = DEFAULT_TIMEOUT, description: String = "", taskState: TaskState, toolRequest: ToolExecutionRequest): ToolCallResult<BashToolOutput> {
         // 验证超时时间
         val actualTimeout = when {
@@ -245,6 +271,9 @@ Usage notes:
         }
     }
 
+    /**
+     * 将 Bash 输出段添加到历史消息中，替换之前的 RUN_COMMAND 段
+     */
     private fun addBashOutputSegmentToHistory(taskState: TaskState, segment: ToolSegment) {
         // 移除之前不包含结果的 RUN_COMMAND segment
         taskState.historyAiMessage.segments.lastOrNull()?.takeIf {
@@ -256,6 +285,11 @@ Usage notes:
         taskState.historyAiMessage.segments.add(segment)
     }
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         (input as JsonObject).let {
             val command = it["command"]?.jsonPrimitive?.contentOrNull 
@@ -273,6 +307,14 @@ Usage notes:
         }
     }
 
+    /**
+     * 处理工具参数流式返回，构建 UI 展示片段
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段，流式阶段返回 null
+     */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         if (isPartial) return null
         val command = partialArgs["command"]!!.value
@@ -287,6 +329,10 @@ Usage notes:
         )
     }
 
+    /**
+     * 校验命令安全性，包括空命令检查、禁止命令检查和多行命令检查
+     * @param command 待校验的命令
+     */
     private fun validateCommand(command: String) {
         val trimmedCommand = command.trim()
         if (trimmedCommand.isEmpty()) {
@@ -304,6 +350,11 @@ Usage notes:
         }
     }
 
+    /**
+     * 格式化命令输出内容，超长时截断中间部分
+     * @param content 原始输出内容
+     * @return 格式化后的输出
+     */
     private fun formatOutput(content: String): FormattedOutput {
         val totalLines = content.split('\n').size
         
@@ -320,6 +371,9 @@ Usage notes:
         }
     }
 
+    /**
+     * 格式化后的命令输出结果
+     */
     private data class FormattedOutput(
         val totalLines: Int,
         val truncatedContent: String

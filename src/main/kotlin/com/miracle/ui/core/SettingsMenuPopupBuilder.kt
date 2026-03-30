@@ -9,9 +9,19 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import java.awt.Component
 
+/**
+ * 构建并显示 Jarvis 设置菜单弹窗，列出所有设置分区供用户选择。
+ *
+ * @param project 当前项目实例
+ */
 internal class SettingsMenuPopupBuilder(
     private val project: Project,
 ) {
+    /**
+     * 在指定锚点组件下方显示设置菜单弹窗。
+     *
+     * @param anchor 弹窗锚点组件
+     */
     fun show(anchor: Component) {
         val actionGroup: ActionGroup = DefaultActionGroup().apply {
             JarvisSettingsSection.entries.forEach { section ->

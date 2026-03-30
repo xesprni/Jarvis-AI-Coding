@@ -24,15 +24,15 @@ sealed class Segment(
     }
 }
 
-// 纯文本渲染块
+/** 纯文本渲染块 */
 @Serializable
 data class TextSegment(val text: String, var eventId: String? = null) : Segment(text)
 
-// 错误消息渲染快
+/** 错误消息渲染块 */
 @Serializable
 data class ErrorSegment(val text: String) : Segment(text)
 
-// 工具调用渲染块
+/** 工具调用类型枚举，标识 Agent 可执行的各种工具操作 */
 enum class UiToolName {
     EDITED_EXISTING_FILE,
     NEW_FILE_CREATED,
@@ -59,11 +59,13 @@ enum class UiToolName {
     EXIT_PLAN_MODE,
 }
 
+/** 工具调用头部信息，包含标题文本和图标 */
 data class ToolHeader(
     val text: String,
     val icon: Icon? = null
 )
 
+/** 工具类型与对应头部信息的映射表 */
 val UI_TOOL_HEADERS = mapOf(
     UiToolName.EDITED_EXISTING_FILE to ToolHeader("{{agent_name}} wants to edit this file:", AllIcons.Actions.Edit),
     UiToolName.NEW_FILE_CREATED to ToolHeader("{{agent_name}} wants to create a new file:", AllIcons.Actions.New),
@@ -93,6 +95,7 @@ val UI_TOOL_HEADERS = mapOf(
     UiToolName.EXIT_PLAN_MODE to ToolHeader("{{agent_name}} has completed planning:", AllIcons.Actions.MenuOpen),
 )
 
+/** 工具调用渲染块，封装工具名称、命令及参数信息 */
 @Serializable
 data class ToolSegment(
     val name: UiToolName,
@@ -108,6 +111,7 @@ data class ToolSegment(
     }
 }
 
+/** Agent 生成的计划内容渲染块，包含 Markdown 格式的计划文本 */
 @Serializable
 data class ProposedPlanSegment(val markdown: String) : Segment(markdown) {
     override fun toMd(): String {
@@ -115,6 +119,12 @@ data class ProposedPlanSegment(val markdown: String) : Segment(markdown) {
     }
 }
 
+/**
+ * 获取工具调用段的头部信息，支持模板参数替换
+ *
+ * @param toolSegment 工具调用段
+ * @return 替换参数后的 ToolHeader
+ */
 fun getToolSegmentHeader(toolSegment: ToolSegment): ToolHeader {
     return UI_TOOL_HEADERS[toolSegment.name]?.let {
         var result = it.text
@@ -126,6 +136,12 @@ fun getToolSegmentHeader(toolSegment: ToolSegment): ToolHeader {
     } ?: ToolHeader("Jarvis wants to run ${toolSegment.name.name}:", AllIcons.Actions.Edit)
 }
 
+/**
+ * 将参数值格式化为带样式的 HTML span 标签
+ *
+ * @param value 需要格式化的文本值
+ * @return 带 HTML 样式的格式化字符串
+ */
 fun formatValueStyle(value: String): String {
     var text = value.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -138,12 +154,12 @@ fun formatValueStyle(value: String): String {
 //    return "<span style=\"color: #D4AF37; background-color: #404040; padding: 2px 4px; font-family: monospace;\">$text</span>"
 }
 
-// 转换为css十六进制
+/** 将颜色转换为 CSS 十六进制格式 */
 private fun toHex(color: Color): String {
     return String.format("#%02x%02x%02x", color.red, color.green, color.blue)
 }
 
-// 代码块渲染块头部 (前端历史会话没处理这里元素，不能存储，否则会多一条空消息)
+/** 代码块渲染块头部，包含语言和文件路径信息 */
 @Serializable
 data class CodeHeader(
     val codeLanguage: String,
@@ -155,8 +171,10 @@ data class CodeHeader(
     }
 }
 
+/** 代码块头部等待状态，头部信息尚未完整解析 */
 data class CodeHeaderWaiting(val partial: String) : Segment(partial)
 
+/** 代码块内容渲染块，包含代码文本及其语言和文件路径 */
 @Serializable
 data class Code(
     val code: String,
@@ -164,7 +182,7 @@ data class Code(
     val codeFilePath: String?
 ) : Segment(code, codeLanguage, codeFilePath)
 
-// 代码块结束 (前端历史会话没处理这里元素，不能存储，否则会多一条空消息)
+/** 代码块结束标记 */
 @Serializable
 data class CodeEnd(val codeContent: String) : Segment(codeContent) {
 
@@ -173,12 +191,14 @@ data class CodeEnd(val codeContent: String) : Segment(codeContent) {
     }
 }
 
+/** 搜索内容等待状态，正在读取 SEARCH 部分的内容 */
 data class SearchWaiting(
     val search: String,
     override val language: String,
     override val filePath: String?
 ) : Segment(search, language, filePath)
 
+/** 替换内容等待状态，正在读取 REPLACE 部分的内容 */
 data class ReplaceWaiting(
     val search: String,
     val replace: String,
@@ -186,6 +206,7 @@ data class ReplaceWaiting(
     override val filePath: String?
 ) : Segment(replace, language, filePath)
 
+/** 搜索替换块，包含完整的搜索内容和替换内容 */
 @Serializable
 data class SearchReplace(
     val search: String,

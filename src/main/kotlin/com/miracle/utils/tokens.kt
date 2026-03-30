@@ -8,9 +8,15 @@ import dev.langchain4j.data.message.ToolExecutionResultMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.model.output.TokenUsage
 
+/** Token 使用情况的属性键名 */
 const val TOKEN_USAGE_KEY = "tokenUsage"
 
 
+/**
+ * 统计消息列表中的 Token 用量，从最新的 AiMessage 开始累加
+ * @param messages 聊天消息列表
+ * @return 估算的 Token 总数
+ */
 fun countTokens(messages: List<ChatMessage>): Int {
     var tokens = 0
     messages.asReversed().forEach { message ->
@@ -31,6 +37,11 @@ fun countTokens(messages: List<ChatMessage>): Int {
     return tokens
 }
 
+/**
+ * 统计消息列表中的缓存 Token 数量（当前未实现）
+ * @param messages 聊天消息列表
+ * @return 缓存的 Token 数量，当前始终返回 0
+ */
 fun countCachedTokens(messages: List<ChatMessage>): Int {
 //    messages.asReversed().forEach { message ->
 //        (message as? AiMessage)?.attribute(TOKEN_USAGE_KEY, TokenUsage::class.java)?.let { tokenUsage ->
@@ -43,6 +54,11 @@ fun countCachedTokens(messages: List<ChatMessage>): Int {
 }
 
 
+/**
+ * 将 Map 转换为 TokenUsage 对象
+ * @param map 包含 inputTokenCount、outputTokenCount、totalTokenCount 的 Map
+ * @return TokenUsage 对象
+ */
 private fun mapToTokenUsage(map: Map<String, Int>): TokenUsage {
     return TokenUsage(
         map["inputTokenCount"] ?: 0,

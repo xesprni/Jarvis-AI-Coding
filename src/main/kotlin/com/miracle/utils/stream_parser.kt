@@ -5,9 +5,15 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
 import java.io.StringReader
 
+/**
+ * JSON 字段提取结果
+ */
 data class JsonField(
+    /** 字段名 */
     val name: String,
+    /** 字段值 */
     val value: String,
+    /** 值是否完整 */
     val isComplete: Boolean
 )
 
@@ -18,6 +24,11 @@ object JsonFieldExtractor {
 
     private val jsonFactory = JsonFactory()
 
+    /**
+     * 从 JSON 字符串中提取所有字段信息，支持不完整的 JSON
+     * @param jsonChunk JSON 字符串片段
+     * @return 字段名到 JsonField 的映射
+     */
     fun extractFields(jsonChunk: String): Map<String, JsonField> {
         val results = mutableListOf<JsonField>()
         if (jsonChunk.isBlank()) {

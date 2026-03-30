@@ -19,9 +19,17 @@ class SseMessageParser: MessageParser{
         const val HEADER_PARTS_LIMIT = 2
     }
 
+    /** 当前解析器状态 */
     private var parserState: ParserState = ParserState.Outside
+    /** 输入内容缓冲区 */
     private val buffer = StringBuilder()
 
+    /**
+     * 解析流式输入文本，将内容拆分为 Segment 列表
+     *
+     * @param input 本次接收到的流式文本片段
+     * @return 本次解析产生的 Segment 列表
+     */
     override fun parse(input: String): List<Segment> {
         val segments = mutableListOf<Segment>()
         var position = 0
@@ -38,6 +46,12 @@ class SseMessageParser: MessageParser{
         return segments
     }
 
+    /**
+     * 根据当前解析状态尝试从缓冲区中提取下一个 Segment
+     *
+     * @param segments 用于收集解析结果的 Segment 列表
+     * @return 是否成功提取了 Segment，true 表示可以继续提取
+     */
     private fun processNextSegment(segments: MutableList<Segment>): Boolean {
         return when (val state = parserState) {
             is ParserState.Outside -> processOutsideState(segments)
@@ -48,6 +62,12 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 处理代码块外部的文本内容，检测代码块起始标记
+     *
+     * @param segments 用于收集解析结果的 Segment 列表
+     * @return 是否成功提取了内容
+     */
     private fun processOutsideState(segments: MutableList<Segment>): Boolean {
         // 这里处理文本区域的时候，如果没有代码块，则直接没读取。
         val fenceIdx = buffer.indexOf(CODE_FENCE)
@@ -61,6 +81,13 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 处理代码块头部信息，解析语言和文件路径
+     *
+     * @param segments 用于收集解析结果的 Segment 列表
+     * @param state 当前等待头部的解析状态
+     * @return 是否成功完成头部解析
+     */
     private fun processCodeHeaderState(segments: MutableList<Segment>, state: ParserState.CodeHeaderWaiting): Boolean {
         // 代码块头部以换行结束
         val nlIdx = buffer.indexOf(NEWLINE)
@@ -82,6 +109,13 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 处理代码块内部内容，检测代码块结束标记或搜索替换标记
+     *
+     * @param segments 用于收集解析结果的 Segment 列表
+     * @param state 当前代码块内的解析状态
+     * @return 是否成功处理了一行内容
+     */
     private fun processInCodeState(segments: MutableList<Segment>, state: ParserState.InCode): Boolean {
         // 代码块尾部以换行结束
         val nlIdx = buffer.indexOf(NEWLINE)
@@ -116,6 +150,13 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 处理搜索替换块中的搜索部分，检测分隔标记
+     *
+     * @param segments 用于收集解析结果的 Segment 列表
+     * @param state 当前搜索块内的解析状态
+     * @return 是否成功处理了一行内容
+     */
     private fun processInSearchState(segments: MutableList<Segment>, state: ParserState.InSearch): Boolean {
         val nlIdx = buffer.indexOf(NEWLINE)
         if (nlIdx < 0)  return false
@@ -143,6 +184,13 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 处理搜索替换块中的替换部分，检测替换结束标记
+     *
+     * @param segments 用于收集解析结果的 Segment 列表
+     * @param state 当前替换块内的解析状态
+     * @return 是否成功处理了一行内容
+     */
     private fun processInReplaceState(segments: MutableList<Segment>, state: ParserState.InReplace): Boolean {
         val nlIdx = buffer.indexOf(NEWLINE)
         if (nlIdx < 0)  return false
@@ -187,16 +235,32 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 提取缓冲区中指定位置之前的文本作为 TextSegment
+     *
+     * @param index 文本截取的结束位置
+     * @return 提取的文本片段，如果位置为 0 则返回 null
+     */
     private fun extractTextBeforeIndex(index: Int): TextSegment? {
         return if (index > 0) TextSegment(buffer.substring(0, index)) else null
     }
 
+    /**
+     * 从缓冲区头部消费指定长度的内容
+     *
+     * @param length 需要消费的字符数
+     */
     private fun consumeFromBuffer(length: Int) {
         buffer.delete(0, length)
     }
 
+    /**
+     * 解析代码块头部文本，提取语言和文件路径
+     *
+     * @param headerText 头部文本，格式为"语言:文件路径"
+     * @return 解析后的 CodeHeader，如果格式不合法则返回 null
+     */
     private fun parseCodeHeader(headerText: String): CodeHeader? {
-        // 代码块头部信息格式：语言:文件路径
         val parts = headerText.split(HEADER_DELIMITER, limit = HEADER_PARTS_LIMIT)
         return if (parts.isNotEmpty()) {
             CodeHeader(
@@ -206,7 +270,7 @@ class SseMessageParser: MessageParser{
         } else null
     }
 
-    // 将未解析完的内容转换成Segment
+    /** 将未解析完的内容转换成 Segment */
     private fun getPendingSegments(): List<Segment> {
         return when(val state = parserState) {
             is ParserState.Outside -> {
@@ -255,6 +319,9 @@ class SseMessageParser: MessageParser{
         }
     }
 
+    /**
+     * 重置解析器状态，清空缓冲区和状态机
+     */
     fun clear() {
         parserState = ParserState.Outside
         buffer.clear()
@@ -266,27 +333,27 @@ class SseMessageParser: MessageParser{
      */
     private sealed class ParserState {
 
-        // 当前处于解析器之外（默认状态、空闲、未进入任何结构）
+        /** 当前处于解析器之外（默认状态、空闲、未进入任何结构） */
         object Outside : ParserState()
 
-        // 刚遇到代码块开头（```），等待读取代码头部信息
+        /** 刚遇到代码块开头（```），等待读取代码头部信息 */
         data class CodeHeaderWaiting(
             val content: String = ""
         ) : ParserState()
 
-        // 当前正在读取代码块内容（已经有 header）
+        /** 当前正在读取代码块内容（已经有 header） */
         data class InCode(
             val header: CodeHeader,
             val content: String = ""
         ) : ParserState()
 
-        // 当前在读取代替换标记块中的 SEARCH 部分
+        /** 当前在读取代替换标记块中的 SEARCH 部分 */
         data class InSearch(
             val header: CodeHeader,
             val searchContent: String = ""
         ) : ParserState()
 
-        // 当前在读取 REPLACE 部分
+        /** 当前在读取 REPLACE 部分 */
         data class InReplace(
             val header: CodeHeader,
             val searchContent: String,

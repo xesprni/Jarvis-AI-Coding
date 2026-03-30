@@ -11,24 +11,39 @@ import dev.langchain4j.model.output.TokenUsage
 import kotlinx.coroutines.runBlocking
 
 /**
- * 模型响应处理
+ * 模型响应处理器，负责处理流式模型响应并将解析后的内容发送到 UI
+ *
+ * @param taskState 当前任务状态
  */
 class ChatResponseHandler(
     private val taskState: TaskState,
 ) : StreamingChatResponseHandler {
 
     private companion object {
+        /** 流式消息发送的最小间隔时间（毫秒） */
         const val SEND_INTERVAL = 100L
         val LOG = thisLogger()
     }
 
+    /** 当前待发送的文本缓冲区 */
     private val textBuffer = StringBuilder()
+    /** 累积的全部文本缓冲区，用于全量重新解析 */
     private val allTextBuffer = StringBuilder()
+    /** 工具调用参数的累积缓冲区 */
     private val toolParamsBuffer = StringBuilder()
+    /** 上一次发送消息的时间戳 */
     private var lastSendTime = 0L
+    /** 上一次发送的 Segment 列表 */
     private var lastSegments: List<com.miracle.agent.parser.Segment> = emptyList()
+    /** 是否存在尚未关闭的 partial 消息 */
     private var hasOpenPartialResponse = false
 
+    /**
+     * 处理流式工具调用片段，负责实时渲染工具调用进度
+     *
+     * @param partialToolCall 当前工具调用的片段数据
+     * @param context 流式响应上下文
+     */
     override fun onPartialToolCall(partialToolCall: PartialToolCall, context: PartialToolCallContext) {
         if (taskState.complete) context.streamingHandle().cancel()
 
@@ -53,6 +68,12 @@ class ChatResponseHandler(
 
     }
 
+    /**
+     * 处理流式文本响应片段，将文本追加到缓冲区并按间隔发送
+     *
+     * @param partialResponse 当前文本响应片段
+     * @param context 流式响应上下文
+     */
     override fun onPartialResponse(partialResponse: PartialResponse, context: PartialResponseContext) {
         if (taskState.complete) context.streamingHandle().cancel()
 
@@ -61,6 +82,11 @@ class ChatResponseHandler(
         sendBuffer()
     }
 
+    /**
+     * 处理完整的模型响应，将 Token 用量信息附加到 AiMessage 并完成 Future
+     *
+     * @param completeResponse 完整的聊天响应
+     */
     override fun onCompleteResponse(completeResponse: ChatResponse) {
         sendBuffer(forceSend = true)
         var aiMessage = completeResponse.aiMessage()
@@ -79,11 +105,21 @@ class ChatResponseHandler(
         taskState.aiMessageFuture.complete(aiMessage)
     }
 
+    /**
+     * 处理流式响应中的错误，将错误传递给 aiMessageFuture
+     *
+     * @param error 发生的异常
+     */
     override fun onError(error: Throwable) {
         sendBuffer(forceSend = true)
         taskState.aiMessageFuture.completeExceptionally(error)
     }
 
+    /**
+     * 将文本缓冲区中的内容解析为 Segment 并发送到 UI
+     *
+     * @param forceSend 是否强制发送（忽略时间间隔限制），为 true 时同时关闭 partial 状态
+     */
     private fun sendBuffer(forceSend: Boolean = false) {
         if (textBuffer.isEmpty()) {
             if (forceSend && hasOpenPartialResponse && lastSegments.isNotEmpty()) {

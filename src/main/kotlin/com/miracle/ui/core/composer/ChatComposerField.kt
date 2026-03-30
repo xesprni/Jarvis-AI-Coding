@@ -56,30 +56,57 @@ import java.awt.event.MouseEvent
 import java.util.UUID
 import javax.swing.KeyStroke
 
+/**
+ * 聊天输入框组件，支持斜杠命令自动补全、@引用文件/文件夹、
+ * 占位符高亮以及代码引用插入等功能。
+ *
+ * @param project 当前 IntelliJ 项目实例
+ * @param onSubmit 用户按下 Enter 提交输入时的回调
+ */
 class ChatComposerField(
     private val project: Project,
     private val onSubmit: () -> Unit,
 ) : EditorTextField(EditorFactory.getInstance().createDocument(""), project, FileTypes.PLAIN_TEXT), com.intellij.openapi.Disposable {
 
+    /**
+     * 编辑器中占位符的内部数据结构，用于表示文件引用、代码引用等内联标签。
+     *
+     * @property highlighter 占位符对应的文本高亮器
+     * @property label 占位符在编辑器中显示的文本标签
+     * @property content 占位符展开后的实际内容
+     */
     private data class EditorPlaceholder(
         val highlighter: RangeHighlighter,
         val label: String,
         var content: String,
     )
 
+    /**
+     * 斜杠命令插入模式，用于确定选中命令后替换文本的范围。
+     */
     private enum class SlashInsertMode {
+        /** 替换整个输入框内容 */
         REPLACE_ALL_INPUT,
+        /** 仅替换光标处的斜杠命令词元 */
         REPLACE_TOKEN_AT_CARET,
     }
 
+    /** 协程作用域，用于管理异步任务 */
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** 搜索管理器，用于查找文件和文件夹引用 */
     private val searchManager = ChatComposerSearchManager(project)
+    /** 当前所有活跃的占位符列表 */
     private val placeholders = mutableListOf<EditorPlaceholder>()
+    /** 斜杠命令高亮器列表 */
     private val slashHighlighters = mutableListOf<RangeHighlighter>()
+    /** 斜杠命令参数占位符高亮器列表 */
     private val slashArgumentHighlighters = mutableListOf<RangeHighlighter>()
+    /** 事件分发器唯一标识，用于匹配当前输入框实例 */
     private val dispatcherId: UUID = UUID.randomUUID()
 
+    /** 当前显示的自动补全弹窗实例 */
     private var lookup: LookupImpl? = null
+    /** 延迟显示建议的协程任务 */
     private var showSuggestionsJob: Job? = null
 
     init {
@@ -94,6 +121,11 @@ class ChatComposerField(
         IdeEventQueue.getInstance().addDispatcher(ChatComposerEventDispatcher(dispatcherId), this)
     }
 
+    /**
+     * 创建编辑器实例，配置软换行和背景色。
+     *
+     * @return 配置完成的编辑器实例
+     */
     override fun createEditor(): EditorEx {
         val editorEx = super.createEditor()
         editorEx.settings.isUseSoftWraps = true
@@ -106,6 +138,11 @@ class ChatComposerField(
         editor.setBorder(JBUI.Borders.empty(2, 8))
     }
 
+    /**
+     * 获取输入框中展开后的完整文本，将所有占位符替换为其对应的实际内容。
+     *
+     * @return 展开后的文本内容
+     */
     fun expandedText(): String {
         val snapshots = placeholders.filter { it.highlighter.isValid }
             .map { placeholder ->
@@ -119,6 +156,9 @@ class ChatComposerField(
         return ChatComposerSupport.expandText(text, snapshots)
     }
 
+    /**
+     * 清空输入框内容，包括文本、所有占位符和斜杠命令高亮。
+     */
     fun clearComposer() {
         hideLookupIfShown()
         text = ""
@@ -127,6 +167,11 @@ class ChatComposerField(
         clearSlashArgumentHighlights()
     }
 
+    /**
+     * 根据插入类型将内容插入到输入框中。
+     *
+     * @param insertion 插入内容，可以是纯文本、代码引用或路径引用
+     */
     fun applyInsertion(insertion: ChatComposerInsertion) {
         when (insertion) {
             is ChatComposerInsertion.PlainText -> appendPlainText(insertion.text)
@@ -150,6 +195,11 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 在输入框末尾追加纯文本内容，自动在已有文本后添加换行分隔。
+     *
+     * @param value 要追加的文本
+     */
     fun appendPlainText(value: String) {
         val normalized = value.trim()
         if (normalized.isBlank()) return
@@ -167,6 +217,15 @@ class ChatComposerField(
         requestComposerFocus()
     }
 
+    /**
+     * 在输入框中插入代码引用占位符，显示为高亮标签。
+     *
+     * @param fileName 文件名
+     * @param filePath 文件完整路径
+     * @param startLine 代码起始行号
+     * @param endLine 代码结束行号
+     * @param selectedCode 选中的代码内容
+     */
     fun insertCodeReference(
         fileName: String,
         filePath: String,
@@ -188,6 +247,12 @@ class ChatComposerField(
         requestComposerFocus()
     }
 
+    /**
+     * 在输入框中插入文件引用占位符，显示为高亮标签。
+     *
+     * @param fileName 文件显示名称
+     * @param filePath 文件完整路径
+     */
     fun insertFileReference(fileName: String, filePath: String) {
         val editor = editor as? EditorEx
         val basePath = project.basePath ?: return
@@ -204,6 +269,12 @@ class ChatComposerField(
         requestComposerFocus()
     }
 
+    /**
+     * 在输入框中插入文件夹引用占位符，显示为高亮标签。
+     *
+     * @param folderName 文件夹显示名称
+     * @param folderPath 文件夹完整路径
+     */
     fun insertFolderReference(folderName: String, folderPath: String) {
         val editor = editor as? EditorEx
         val basePath = project.basePath ?: return
@@ -220,6 +291,9 @@ class ChatComposerField(
         requestComposerFocus()
     }
 
+    /**
+     * 请求将焦点设置到输入框并将光标移动到文本末尾。
+     */
     fun requestComposerFocus() {
         ApplicationManager.getApplication().invokeLater {
             requestFocusInWindow()
@@ -227,6 +301,12 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 处理占位符的删除操作，支持退格键和删除键，以及选区删除。
+     *
+     * @param isBackspace 是否为退格键删除（true 为退格，false 为 Delete 键）
+     * @return 是否成功处理了占位符删除
+     */
     internal fun handlePlaceholderDelete(isBackspace: Boolean): Boolean {
         val editor = editor as? EditorEx ?: return false
         val document = editor.document
@@ -272,10 +352,20 @@ class ChatComposerField(
         return true
     }
 
+    /**
+     * 检查自动补全弹窗是否当前可见。
+     *
+     * @return 弹窗是否可见且未被销毁
+     */
     internal fun isLookupVisible(): Boolean {
         return lookup?.let { it.isShown && !it.isLookupDisposed } == true
     }
 
+    /**
+     * 为编辑器设置文档变更监听器，处理 @引用、/命令的自动补全触发以及占位符维护。
+     *
+     * @param editor 目标编辑器实例
+     */
     private fun setupDocumentListener(editor: EditorEx) {
         editor.document.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
@@ -295,6 +385,12 @@ class ChatComposerField(
         }, this)
     }
 
+    /**
+     * 处理文本变更事件，根据当前输入内容决定显示引用补全还是斜杠命令补全。
+     *
+     * @param text 当前文档完整文本
+     * @param caretOffset 当前光标位置
+     */
     private fun handleTextChange(text: String, caretOffset: Int) {
         val searchText = ChatComposerSupport.findSearchTextAfterAt(text, caretOffset)
         val slashSearchText = ChatComposerSupport.findSlashSearchText(text, caretOffset)
@@ -324,10 +420,22 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 根据当前文本和光标位置解析斜杠命令查找的范围。
+     *
+     * @param text 当前文档文本
+     * @param caretOffset 光标位置
+     * @return 斜杠命令查找范围
+     */
     private fun resolveSlashLookupScope(text: String, caretOffset: Int): SlashCommandScope {
         return ChatComposerSupport.resolveSlashLookupScope(text, caretOffset)
     }
 
+    /**
+     * 显示文件/文件夹引用的自动补全弹窗，搜索匹配的文件和文件夹。
+     *
+     * @param searchText 搜索关键词，为空时显示默认推荐项
+     */
     private fun showReferenceLookup(searchText: String) {
         showSuggestionsJob?.cancel()
         showSuggestionsJob = coroutineScope.launch {
@@ -359,6 +467,12 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 显示斜杠命令的自动补全弹窗，列出匹配的命令列表。
+     *
+     * @scope 斜杠命令查找范围
+     * @param prefix 当前已输入的斜杠命令前缀
+     */
     private fun showSlashLookup(scope: SlashCommandScope, prefix: String) {
         showSuggestionsJob?.cancel()
         showSuggestionsJob = coroutineScope.launch {
@@ -413,6 +527,14 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 创建自动补全弹窗实例。
+     *
+     * @param editor 关联的编辑器
+     * @param lookupElements 补全候选元素数组
+     * @param prefix 已输入的前缀文本
+     * @return 创建的 LookupImpl 实例
+     */
     private fun createLookup(
         editor: Editor,
         lookupElements: Array<LookupElement>,
@@ -426,6 +548,11 @@ class ChatComposerField(
         ) as LookupImpl
     }
 
+    /**
+     * 显示自动补全弹窗，隐藏已有的弹窗。
+     *
+     * @param newLookup 要显示的新弹窗实例
+     */
     private fun showLookup(newLookup: LookupImpl) {
         hideLookupIfShown()
         lookup = newLookup
@@ -433,6 +560,9 @@ class ChatComposerField(
         newLookup.showLookup()
     }
 
+    /**
+     * 隐藏当前显示的自动补全弹窗。
+     */
     private fun hideLookupIfShown() {
         lookup?.let { existingLookup ->
             if (!existingLookup.isLookupDisposed && existingLookup.isShown) {
@@ -442,6 +572,13 @@ class ChatComposerField(
         lookup = null
     }
 
+    /**
+     * 替换当前选中文本或在光标位置插入新文本。
+     *
+     * @param editor 编辑器实例
+     * @param value 要插入的文本
+     * @return 插入文本的起始和结束位置对
+     */
     private fun replaceSelectionOrInsert(editor: EditorEx, value: String): Pair<Int, Int> {
         val document = editor.document
         val caret = editor.caretModel
@@ -461,6 +598,15 @@ class ChatComposerField(
         return start to end
     }
 
+    /**
+     * 在编辑器中添加占位符高亮，用于显示文件引用、代码引用等内联标签。
+     *
+     * @param editor 编辑器实例
+     * @param start 占位符起始偏移量
+     * @param end 占位符结束偏移量
+     * @param label 占位符显示文本
+     * @param content 占位符展开后的实际内容
+     */
     private fun addPlaceholder(
         editor: EditorEx,
         start: Int,
@@ -486,6 +632,12 @@ class ChatComposerField(
         placeholders.add(EditorPlaceholder(highlighter, label, content))
     }
 
+    /**
+     * 查找指定偏移量处的占位符。
+     *
+     * @param offset 目标偏移量
+     * @return 匹配的占位符，未找到时返回 null
+     */
     private fun findPlaceholderAtOffset(offset: Int): EditorPlaceholder? {
         return placeholders.firstOrNull { placeholder ->
             placeholder.highlighter.isValid &&
@@ -494,6 +646,13 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 查找与指定范围相交的所有占位符。
+     *
+     * @param start 范围起始偏移量
+     * @param end 范围结束偏移量
+     * @return 相交的占位符列表
+     */
     private fun findPlaceholdersIntersecting(start: Int, end: Int): List<EditorPlaceholder> {
         return placeholders.filter { placeholder ->
             placeholder.highlighter.isValid &&
@@ -502,6 +661,9 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 清除所有占位符及其高亮。
+     */
     private fun clearPlaceholders() {
         val editor = editor as? EditorEx ?: return
         if (editor.isDisposed) return
@@ -511,6 +673,9 @@ class ChatComposerField(
         placeholders.clear()
     }
 
+    /**
+     * 刷新文档中的斜杠命令高亮，清除旧高亮并根据当前文本重新标记。
+     */
     private fun refreshSlashHighlights() {
         val editorEx = editor as? EditorEx ?: return
         if (editorEx.isDisposed) return
@@ -565,11 +730,19 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 清除所有斜杠命令高亮（无参版本，自动获取编辑器实例）。
+     */
     private fun clearSlashHighlights() {
         val editorEx = editor as? EditorEx ?: return
         clearSlashHighlights(editorEx)
     }
 
+    /**
+     * 清除指定编辑器上的所有斜杠命令高亮。
+     *
+     * @param editorEx 目标编辑器
+     */
     private fun clearSlashHighlights(editorEx: EditorEx) {
         if (editorEx.isDisposed) return
         slashHighlighters.forEach { highlighter ->
@@ -578,11 +751,19 @@ class ChatComposerField(
         slashHighlighters.clear()
     }
 
+    /**
+     * 清除所有斜杠命令参数占位符高亮（无参版本，自动获取编辑器实例）。
+     */
     private fun clearSlashArgumentHighlights() {
         val editorEx = editor as? EditorEx ?: return
         clearSlashArgumentHighlights(editorEx)
     }
 
+    /**
+     * 清除指定编辑器上的所有斜杠命令参数占位符高亮。
+     *
+     * @param editorEx 目标编辑器
+     */
     private fun clearSlashArgumentHighlights(editorEx: EditorEx) {
         if (editorEx.isDisposed) return
         slashArgumentHighlighters.forEach { highlighter ->
@@ -591,6 +772,12 @@ class ChatComposerField(
         slashArgumentHighlighters.clear()
     }
 
+    /**
+     * 在匹配到斜杠命令后自动追加空格，提升输入体验。
+     *
+     * @param event 文档变更事件
+     * @param text 当前文档文本
+     */
     private fun maybeAppendSpaceAfterMatchedSlash(event: DocumentEvent, text: String) {
         if (event.oldLength != 0 || event.newLength == 0) return
         val insertedText = event.newFragment.toString()
@@ -641,18 +828,37 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 查找指定偏移量处的斜杠命令高亮器。
+     *
+     * @param offset 目标偏移量
+     * @return 匹配的高亮器，未找到时返回 null
+     */
     private fun findSlashHighlighterAtOffset(offset: Int): RangeHighlighter? {
         return slashHighlighters.firstOrNull { highlighter ->
             highlighter.isValid && offset >= highlighter.startOffset && offset < highlighter.endOffset
         }
     }
 
+    /**
+     * 查找与指定范围相交的所有斜杠命令高亮器。
+     *
+     * @param start 范围起始偏移量
+     * @param end 范围结束偏移量
+     * @return 相交的高亮器列表
+     */
     private fun findSlashHighlightersIntersecting(start: Int, end: Int): List<RangeHighlighter> {
         return slashHighlighters.filter { highlighter ->
             highlighter.isValid && highlighter.startOffset < end && highlighter.endOffset > start
         }
     }
 
+    /**
+     * 处理斜杠命令高亮词元的删除操作，删除时整个命令词元会被整体移除。
+     *
+     * @param isBackspace 是否为退格键删除
+     * @return 是否成功处理了删除操作
+     */
     internal fun handleSlashTokenDelete(isBackspace: Boolean): Boolean {
         val editorEx = editor as? EditorEx ?: return false
         if (slashHighlighters.isEmpty()) return false
@@ -701,6 +907,11 @@ class ChatComposerField(
         return true
     }
 
+    /**
+     * 清理失效或文本不匹配的占位符，保持占位符列表与文档内容一致。
+     *
+     * @param event 文档变更事件
+     */
     private fun prunePlaceholders(event: DocumentEvent) {
         if (placeholders.isEmpty()) return
         val editor = editor as? EditorEx ?: return
@@ -731,6 +942,9 @@ class ChatComposerField(
         placeholders.removeAll(toRemove.toSet())
     }
 
+    /**
+     * 执行粘贴操作，当剪贴板内容与当前编辑器选区匹配时自动插入为代码引用。
+     */
     private fun insertSelectionAwarePaste() {
         val clipText = try {
             CopyPasteManager.getInstance().getContents(DataFlavor.stringFlavor) as? String
@@ -770,6 +984,9 @@ class ChatComposerField(
         }
     }
 
+    /**
+     * 释放资源，隐藏弹窗、清除高亮并取消协程任务。
+     */
     override fun dispose() {
         hideLookupIfShown()
         clearPlaceholders()
@@ -779,10 +996,22 @@ class ChatComposerField(
         coroutineScope.cancel()
     }
 
+    /**
+     * 聊天输入框的事件分发器，负责拦截键盘和鼠标事件，
+     * 处理占位符删除、斜杠命令词元删除、粘贴和提交等操作。
+     *
+     * @param targetDispatcherId 目标输入框的唯一标识，用于匹配事件
+     */
     private inner class ChatComposerEventDispatcher(
         private val targetDispatcherId: UUID,
     ) : IdeEventQueue.EventDispatcher {
 
+        /**
+         * 分发并处理 AWT 事件，拦截特定按键以实现自定义行为。
+         *
+         * @param event AWT 事件
+         * @return 是否已消费该事件
+         */
         override fun dispatch(event: AWTEvent): Boolean {
             if ((event is KeyEvent || event is MouseEvent) && findFocusedComposer() != null) {
                 if (event is KeyEvent) {
@@ -836,12 +1065,23 @@ class ChatComposerField(
             return false
         }
 
+        /**
+         * 查找当前获得焦点的 ChatComposerField 实例。
+         *
+         * @return 匹配的组件实例，未找到时返回 null
+         */
         private fun findFocusedComposer(): Component? {
             return findParentByCondition(KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner) { component ->
                 component is ChatComposerField && component.dispatcherId == targetDispatcherId
             }
         }
 
+        /**
+         * 处理自动补全弹窗中的字符拦截（句点和空格），自动插入字符并保持输入连贯性。
+         *
+         * @param event 键盘事件
+         * @return 是否已处理该事件
+         */
         private fun handleLookupInterception(event: KeyEvent): Boolean {
             if (!isLookupVisible()) {
                 return false

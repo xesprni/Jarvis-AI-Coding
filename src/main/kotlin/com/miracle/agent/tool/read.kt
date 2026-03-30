@@ -16,12 +16,18 @@ import java.io.File
 import kotlin.math.roundToInt
 import kotlin.reflect.KFunction
 
+/**
+ * Read 工具的输出结果
+ */
 data class ReadToolOutput(
-    val filePath: String,
-    val content: String,
-    val startLine: Int,
+    val filePath: String, // 文件路径
+    val content: String, // 文件内容
+    val startLine: Int, // 起始行号（1-based）
 )
 
+/**
+ * 文件读取工具，支持按行偏移和行数限制读取文件内容
+ */
 object ReadTool: Tool<ReadToolOutput> {
 
     val SPEC = ToolSpecification.builder()
@@ -54,10 +60,14 @@ Usage:
             .required("file_path", "offset", "limit")
             .build())
         .build()
-    // Common image extensions
+    // 常见的图片文件扩展名
     val IMAGE_EXTENSIONS = setOf(".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
     const val MAX_OUTPUT_SIZE = 0.25 * 1024 * 1024 // 0.25MB in bytes
 
+    /**
+     * 获取工具规格定义
+     * @return Read 工具的规格定义
+     */
     override fun renderResultForAssistant(output: ReadToolOutput): String {
         if (output.content.isBlank()) {
             return "<system-reminder>Warning: the file exists but is shorter than the provided offset (1). The file has 1 lines.</system-reminder>"
@@ -67,14 +77,31 @@ Usage:
         return result
     }
 
+    /**
+     * 获取工具规格定义
+     * @return Read 工具的规格定义
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<ReadToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 执行文件读取操作
+     * @param taskState 当前任务状态
+     * @param file_path 文件绝对路径
+     * @param offset 起始行号（1-based），默认从文件开头读取
+     * @param limit 读取的最大行数
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(
         taskState: TaskState,
         file_path: String,
@@ -109,6 +136,11 @@ Usage:
         )
     }
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         (input as JsonObject).let {
             val filePath = it["file_path"]?.jsonPrimitive?.contentOrNull
@@ -147,6 +179,11 @@ Usage:
         }
     }
 
+    /**
+     * 工具执行完成后的后置处理，更新历史消息中的展示内容
+     * @param data 工具输出数据
+     * @param taskState 当前任务状态
+     */
     override suspend fun afterAddToolResult(data: Any?, taskState: TaskState) {
         val output = data as? ReadToolOutput ?: return
         val segments = taskState.historyAiMessage.segments
@@ -157,6 +194,14 @@ Usage:
         }
     }
 
+    /**
+     * 处理工具参数流式返回，构建 UI 展示片段
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段，流式阶段返回 null
+     */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         if (isPartial) return null
 
@@ -176,6 +221,14 @@ Usage:
         )
     }
 
+    /**
+     * 构建工具展示用的 ToolSegment
+     * @param taskState 当前任务状态
+     * @param filePath 文件路径
+     * @param output 读取工具输出
+     * @param limit 行数限制
+     * @return 工具展示片段
+     */
     private fun renderToolSegment(
         taskState: TaskState,
         filePath: String,
@@ -197,14 +250,30 @@ Usage:
         )
     }
 
+    /**
+     * 获取 UI 展示用的内容文本
+     * @param output 读取工具输出
+     * @return 展示内容
+     */
     private fun uiToolContent(output: ReadToolOutput): String {
         return output.content.ifBlank { renderResultForAssistant(output) }
     }
 
+    /**
+     * 生成文件大小超限时的错误提示信息
+     * @param sizeInBytes 文件大小（字节）
+     * @return 格式化的错误信息
+     */
     private fun formatFileSizeError(sizeInBytes: Number): String {
         return "File content (${(sizeInBytes.toDouble() / 1024).roundToInt()}KB) exceeds maximum allowed size (${(MAX_OUTPUT_SIZE / 1024).roundToInt()}KB). Please use offset and limit parameters to read specific portions of the file, or use the GrepTool to search for specific content."
     }
 
+    /**
+     * 解析文件路径，处理协议路径和普通路径的转换
+     * @param filePath 原始文件路径
+     * @param project 当前项目
+     * @return 标准化后的文件路径
+     */
     private fun resolveFilePath(filePath: String, project: Project): String {
         return if (filePath.contains("://")) {
             toPosixPath(filePath)
@@ -213,12 +282,22 @@ Usage:
         }
     }
 
+    /**
+     * 获取文件扩展名（小写）
+     * @param filePath 文件路径
+     * @return 文件扩展名
+     */
     private fun getFileExtension(filePath: String): String {
         val sanitized = filePath.replace('\\', '/')
         val lastSegment = sanitized.substringAfterLast('/', sanitized)
         return lastSegment.substringAfterLast('.', "").lowercase()
     }
 
+    /**
+     * 判断文件路径是否为 .class 文件
+     * @param filePath 文件路径
+     * @return 是否为 .class 文件
+     */
     private fun isClassFilePath(filePath: String): Boolean {
         return filePath.trim().lowercase().endsWith(".class")
     }

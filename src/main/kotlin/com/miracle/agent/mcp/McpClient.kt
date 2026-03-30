@@ -27,12 +27,27 @@ import java.io.File
 import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * MCP 协议客户端，负责与 MCP 服务器建立连接并管理通信。
+ * 支持三种传输方式：stdio、sse、streamableHttp。
+ *
+ * @param clientInfo 客户端身份信息，默认为 "default-mcp-client"
+ */
 class McpClient(
     clientInfo: Implementation = Implementation(name = "default-mcp-client", version = "1.0.0")
 ) : AutoCloseable {
+    /** MCP 协议客户端实例 */
     private val mcp: Client = Client(clientInfo)
     private val LOG = Logger.getInstance(McpClient::class.java)
 
+    /**
+     * 根据服务器配置连接到 MCP 服务器
+     *
+     * @param serverConfig MCP 服务器配置信息
+     * @return 已连接的 MCP 客户端实例
+     * @throws IllegalArgumentException 当服务器类型无效时
+     * @throws Exception 连接失败时抛出异常
+     */
     suspend fun connectToServer(serverConfig: McpServerConfig): Client {
         try {
             when (serverConfig.type) {
@@ -48,6 +63,11 @@ class McpClient(
         return mcp
     }
 
+    /**
+     * 通过 stdio 方式连接 MCP 服务器
+     *
+     * @param serverConfig MCP 服务器配置信息
+     */
     private suspend fun connectMcpStdio(serverConfig: McpServerConfig) = withContext(Dispatchers.IO) {
         require(serverConfig.command.isNotEmpty()) { "Command cannot be null or empty" }
         val fullCommand = buildCommand(serverConfig)
@@ -77,6 +97,11 @@ class McpClient(
         }
     }
 
+    /**
+     * 为 HTTP 请求添加 MCP 认证头和自定义头信息
+     *
+     * @param serverConfig 包含 token 和自定义 headers 的服务器配置
+     */
     private fun DefaultRequest.DefaultRequestBuilder.applyMcpHeaders(serverConfig: McpServerConfig) {
         if (serverConfig.token.isNotBlank()) {
             header(HttpHeaders.Authorization, "Bearer ${serverConfig.token}")
@@ -86,6 +111,11 @@ class McpClient(
         }
     }
 
+    /**
+     * 通过 Streamable HTTP 方式连接 MCP 服务器
+     *
+     * @param serverConfig MCP 服务器配置信息
+     */
     private suspend fun connectMcpStreamableHttp(serverConfig: McpServerConfig) = withContext(Dispatchers.IO) {
         val baseUrl = serverConfig.url.ifEmpty { serverConfig.command }
         var sessionId: String? = null
@@ -110,6 +140,11 @@ class McpClient(
         mcp.connect(StreamableHttpClientTransport(url = baseUrl, client = http))
     }
 
+    /**
+     * 通过 SSE（Server-Sent Events）方式连接 MCP 服务器
+     *
+     * @param serverConfig MCP 服务器配置信息
+     */
     private suspend fun connectMcpSse(serverConfig: McpServerConfig) = withContext(Dispatchers.IO) {
         val baseUrl = serverConfig.url.ifEmpty { serverConfig.command }
         val http = HttpClient(CIO) {
@@ -127,16 +162,30 @@ class McpClient(
         mcp.connect(SseClientTransport(urlString = baseUrl, client = http))
     }
 
+    /**
+     * 获取 MCP 客户端实例
+     *
+     * @return MCP 客户端实例
+     */
     fun getClient(): Client {
         return mcp
     }
 
+    /**
+     * 关闭 MCP 客户端连接并释放资源
+     */
     override fun close() {
         runBlocking {
             mcp.close()
         }
     }
 
+    /**
+     * 将服务器配置中的命令和参数组装为完整的命令列表
+     *
+     * @param serverConfig MCP 服务器配置信息
+     * @return 命令及其参数的列表
+     */
     private fun buildCommand(serverConfig: McpServerConfig): List<String> {
         return if (serverConfig.args.isNotEmpty()) {
             listOf(serverConfig.command) + serverConfig.args
@@ -145,6 +194,12 @@ class McpClient(
         }
     }
 
+    /**
+     * 确保可执行文件所在目录已加入 PATH 环境变量中，避免子进程找不到相关依赖
+     *
+     * @param environment 进程环境变量映射
+     * @param commandPath 可执行文件的绝对路径
+     */
     private fun ensureCommandDirectoryInPath(environment: MutableMap<String, String>, commandPath: String) {
         val commandDir = File(commandPath).parentFile?.absolutePath ?: return
         val pathKey = environment.keys.firstOrNull { it.equals("PATH", ignoreCase = true) } ?: "PATH"
@@ -173,6 +228,13 @@ class McpClient(
         environment[pathKey] = normalizedEntries.joinToString(separator)
     }
 
+    /**
+     * 解析可执行文件的完整路径，支持绝对路径、PATH 查找和常见包管理器目录回退
+     *
+     * @param command 待解析的命令名称或路径
+     * @return 可执行文件的绝对路径
+     * @throws IOException 当可执行文件未找到或不可执行时
+     */
     private fun resolveExecutable(command: String): String {
         val commandFile = File(command)
         if (commandFile.isAbsolute) {
@@ -190,6 +252,11 @@ class McpClient(
         throw IOException("Executable '$command' not found. Provide an absolute path in the MCP configuration or ensure it is available on PATH.")
     }
 
+    /**
+     * 获取常见包管理器和运行时的可执行文件目录列表，作为 PATH 查找的回退方案
+     *
+     * @return 候选可执行文件目录列表
+     */
     private fun fallbackExecutableDirectories(): List<String> {
         val home = System.getProperty("user.home")
         val osName = System.getProperty("os.name")?.lowercase()
@@ -219,6 +286,12 @@ class McpClient(
         private const val CONNECT_TIMEOUT_MS = 30_000L
     }
 
+    /**
+     * 根据配置的超时秒数计算毫秒级超时时间，未配置时使用默认值
+     *
+     * @param timeoutSeconds 配置的超时秒数，为 null 或小于等于 0 时使用默认值
+     * @return 超时时间（毫秒）
+     */
     private fun calculateTimeoutMs(timeoutSeconds: Long?): Long {
         return timeoutSeconds?.takeIf { it > 0 }?.times(1000L) ?: CONNECT_TIMEOUT_MS
     }

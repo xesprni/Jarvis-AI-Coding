@@ -23,7 +23,13 @@ import java.math.BigDecimal
 import kotlin.reflect.KFunction
 
 /**
- * 负责将已连接的 MCP 服务工具实例化为 Agent 可用的 Tool 实例
+ * MCP 工具调用的输出结果
+ *
+ * @property serverName MCP 服务器名称
+ * @property toolName 工具名称
+ * @property arguments 调用参数
+ * @property result 文本形式的结果
+ * @property structuredResult 结构化 JSON 结果
  */
 data class McpToolOutput(
     val serverName: String,
@@ -33,13 +39,23 @@ data class McpToolOutput(
     val structuredResult: JsonObject?
 )
 
+/**
+ * 负责将已连接的 MCP 服务工具实例化为 Agent 可用的 Tool 实例，
+ * 包含工具规格构建、参数校验、参数归一化、执行调用和结果渲染等完整生命周期。
+ *
+ * @param descriptor 已连接的 MCP 工具描述信息
+ */
 class McpServerToolInstance(
     descriptor: ConnectedMcpTool,
 ) : Tool<McpToolOutput> {
 
+    /** MCP 服务器名称 */
     private val serverName = descriptor.serverName
+    /** MCP 远程工具定义 */
     private val remoteTool = descriptor.tool
+    /** 远程服务器名称 */
     private val remoteServerName = descriptor.remoteServerName
+    /** LangChain4j 工具规格 */
     private val toolSpecification: ToolSpecification = buildSpecification(descriptor)
     private val LOG = Logger.getInstance(McpServerToolInstance::class.java)
 
@@ -57,6 +73,12 @@ class McpServerToolInstance(
         return buildResultText(output)
     }
 
+    /**
+     * 从 MCP 响应内容中提取错误消息文本
+     *
+     * @param content MCP 响应内容列表
+     * @return 错误消息文本，无内容时返回空字符串
+     */
     fun extractErrorMessage(content: List<PromptMessageContent>?): String {
         if (content.isNullOrEmpty()) return ""
         return content.firstNotNullOfOrNull { part ->
@@ -67,6 +89,12 @@ class McpServerToolInstance(
         }.orEmpty()
     }
 
+    /**
+     * 将 MCP 响应内容列表渲染为文本字符串
+     *
+     * @param content MCP 响应内容列表
+     * @return 拼接后的文本内容
+     */
     fun renderContent(content: List<PromptMessageContent>?): String {
         if (content.isNullOrEmpty()) {
             return ""
@@ -79,6 +107,12 @@ class McpServerToolInstance(
         }.trim()
     }
 
+    /**
+     * 构建工具调用结果的文本表示，优先使用结构化结果
+     *
+     * @param output 工具输出结果
+     * @return 格式化后的结果文本
+     */
     fun buildResultText(
         output: McpToolOutput,
     ): String {
@@ -98,6 +132,15 @@ class McpServerToolInstance(
         return PRETTY_JSON.encodeToString(JsonObject.serializer(), jsonObject)
     }
 
+    /**
+     * 执行 MCP 工具调用，向远程服务器发送请求并返回结果
+     *
+     * @param originParams 原始调用参数
+     * @param taskState 任务状态，用于发送进度事件
+     * @param toolRequest 工具执行请求
+     * @return 工具调用结果
+     * @throws ToolExecutionException 执行失败时抛出
+     */
     @Suppress("unused")
     suspend fun execute(
         originParams: JsonObject? = null,
@@ -196,6 +239,13 @@ class McpServerToolInstance(
         )
     }
 
+    /**
+     * 根据已连接的 MCP 工具描述构建 LangChain4j ToolSpecification，
+     * 将 MCP 工具的 inputSchema 转换为 JSON Schema 定义
+     *
+     * @param descriptor 已连接的 MCP 工具描述
+     * @return LangChain4j 工具规格
+     */
     fun buildSpecification(descriptor: McpClientHub.ConnectedMcpTool): ToolSpecification {
         val tool = descriptor.tool
         val canonicalName = canonicalToolName(descriptor.serverName, tool.name)
@@ -236,15 +286,36 @@ class McpServerToolInstance(
             ignoreUnknownKeys = true
         }
 
-        fun canonicalToolName(serverName: String, toolName: String): String {
+    /**
+     * 将 MCP 工具名称转换为规范的 Agent 工具名称格式（mcp__serverName__toolName）
+     *
+     * @param serverName 服务器名称
+     * @param toolName 工具名称
+     * @return 规范化后的工具名称
+     */
+    fun canonicalToolName(serverName: String, toolName: String): String {
             return "$MCP_SERVER_PREFIX${serverName}__${toolName}"
         }
     }
 
+    /**
+     * 根据工具的 inputSchema 对调用参数进行类型归一化处理，
+     * 将字符串形式的参数值强制转换为 schema 声明的类型
+     *
+     * @param arguments 原始调用参数
+     * @return 归一化后的参数，无需变更时返回原始对象
+     */
     private fun normalizeArguments(arguments: JsonObject?): JsonObject? {
         return normalizeObjectArguments(arguments, remoteTool.inputSchema.properties)
     }
 
+    /**
+     * 对 JSON 对象中的每个字段根据 schema 属性定义进行归一化处理
+     *
+     * @param arguments 待归一化的 JSON 对象
+     * @param schemaProperties schema 中的属性定义
+     * @return 归一化后的 JSON 对象
+     */
     private fun normalizeObjectArguments(
         arguments: JsonObject?,
         schemaProperties: JsonObject?
@@ -266,6 +337,13 @@ class McpServerToolInstance(
         return if (changed) JsonObject(normalized) else arguments
     }
 
+    /**
+     * 根据 schema 类型定义对单个 JSON 值进行归一化
+     *
+     * @param value 待归一化的 JSON 值
+     * @param rawSchema 该字段的 schema 定义
+     * @return 归一化后的 JSON 值
+     */
     private fun normalizeValueAgainstSchema(value: JsonElement, rawSchema: JsonElement): JsonElement {
         val schemaObject = rawSchema.asJsonObjectOrNull() ?: return value
         val types = extractSchemaTypes(schemaObject)
@@ -378,6 +456,12 @@ class McpServerToolInstance(
         }
     }
 
+    /**
+     * 将 JSON Schema 元素转换为 LangChain4j 的 JsonSchemaElement
+     *
+     * @param schema JSON Schema 元素
+     * @return 对应的 JsonSchemaElement 实例
+     */
     private fun buildJsonSchemaElement(schema: JsonElement): JsonSchemaElement {
         val schemaObject = schema.asJsonObjectOrNull() ?: return JsonStringSchema()
         val description = schemaObject["description"]?.jsonPrimitive?.contentOrNull
@@ -445,6 +529,13 @@ class McpServerToolInstance(
         return description?.let { JsonBooleanSchema.builder().description(it).build() } ?: JsonBooleanSchema()
     }
 
+    /**
+     * 从 schema 对象中提取类型集合，支持字符串和数组形式的 type 定义，
+     * 无法从 type 推断时尝试根据 properties/items 字段推断
+     *
+     * @param schemaObject schema JSON 对象
+     * @return 推断出的类型集合
+     */
     private fun extractSchemaTypes(schemaObject: JsonObject): Set<SchemaType> {
         val typeElement = schemaObject["type"]
         val explicitTypes = when (typeElement) {
@@ -478,6 +569,7 @@ class McpServerToolInstance(
 
     private fun JsonElement?.asJsonArrayOrNull(): JsonArray? = this as? JsonArray
 
+    /** JSON Schema 类型枚举，用于类型推断和归一化 */
     private enum class SchemaType {
         STRING,
         NUMBER,

@@ -41,10 +41,16 @@ import javax.swing.ListCellRenderer
 import javax.swing.ListSelectionModel
 import javax.swing.ScrollPaneConstants
 
+/**
+ * 关联文件选择弹窗，支持搜索项目文件并将选中的文件添加到聊天上下文中。
+ *
+ * @param project 当前项目实例
+ */
 internal class AssociatedFilePickerPopup(
     private val project: Project,
 ) {
 
+    /** 文件选择项，包含文件引用和是否已关联的标记 */
     private data class FilePickerItem(
         val file: VirtualFile,
         val alreadyAssociated: Boolean,
@@ -53,6 +59,13 @@ internal class AssociatedFilePickerPopup(
             get() = file.name
     }
 
+    /**
+     * 显示文件选择弹窗。
+     *
+     * @param anchor 弹窗锚点组件
+     * @param existingPaths 已关联的文件路径集合
+     * @param onFileSelected 文件选中回调
+     */
     fun show(
         anchor: Component,
         existingPaths: Set<String>,
@@ -183,6 +196,7 @@ internal class AssociatedFilePickerPopup(
         }
     }
 
+    /** 文件选择列表的单元格渲染器 */
     private class FilePickerCellRenderer(
         private val project: Project,
     ) : JPanel(), ListCellRenderer<FilePickerItem> {
@@ -240,6 +254,7 @@ internal class AssociatedFilePickerPopup(
         }
     }
 
+    /** 简化的文档监听器接口 */
     private fun interface SimpleDocumentListener : javax.swing.event.DocumentListener {
         override fun insertUpdate(e: javax.swing.event.DocumentEvent?) = onChanged()
         override fun removeUpdate(e: javax.swing.event.DocumentEvent?) = onChanged()

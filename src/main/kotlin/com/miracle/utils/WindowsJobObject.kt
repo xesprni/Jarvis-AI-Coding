@@ -121,6 +121,9 @@ class WindowsJobObject private constructor(private val jobHandle: WinNT.HANDLE) 
     }
     
     // JNA 接口定义
+    /**
+     * Windows Kernel32 扩展接口，封装 Job Object 相关的 API
+     */
     interface Kernel32Ex : StdCallLibrary {
         companion object {
             val INSTANCE: Kernel32Ex? = try {
@@ -148,6 +151,9 @@ class WindowsJobObject private constructor(private val jobHandle: WinNT.HANDLE) 
     }
     
     // Job Object 结构体定义
+    /**
+     * Job Object 基本限制信息结构体
+     */
     class JOBOBJECT_BASIC_LIMIT_INFORMATION : Structure() {
         @JvmField var PerProcessUserTimeLimit = WinNT.LARGE_INTEGER()
         @JvmField var PerJobUserTimeLimit = WinNT.LARGE_INTEGER()
@@ -172,6 +178,9 @@ class WindowsJobObject private constructor(private val jobHandle: WinNT.HANDLE) 
         )
     }
     
+    /**
+     * IO 计数器结构体
+     */
     class IO_COUNTERS : Structure() {
         @JvmField var ReadOperationCount: Long = 0
         @JvmField var WriteOperationCount: Long = 0
@@ -190,6 +199,9 @@ class WindowsJobObject private constructor(private val jobHandle: WinNT.HANDLE) 
         )
     }
     
+    /**
+     * Job Object 扩展限制信息结构体
+     */
     class JOBOBJECT_EXTENDED_LIMIT_INFORMATION : Structure() {
         @JvmField var BasicLimitInformation = JOBOBJECT_BASIC_LIMIT_INFORMATION()
         @JvmField var IoInfo = IO_COUNTERS()

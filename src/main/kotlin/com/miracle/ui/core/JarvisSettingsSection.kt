@@ -3,6 +3,9 @@ package com.miracle.ui.core
 import com.intellij.icons.AllIcons
 import javax.swing.Icon
 
+/**
+ * Jarvis 设置分区的枚举定义，每个分区包含标题、描述和图标。
+ */
 internal enum class JarvisSettingsSection(
     val title: String,
     val description: String,

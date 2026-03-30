@@ -10,16 +10,34 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 
+/**
+ * 操作系统信息数据类
+ */
 data class OSInfo(
+    /** 操作系统名称 */
     val name: String,
+    /** 平台架构路径标识（如 "mac_aarch64"） */
     val path: String,
+    /** 是否为 Windows 系统 */
     val isWindows: Boolean
 )
 
+/**
+ * 命令行执行工具类，提供进程运行、OS 检测和二进制文件安装功能
+ */
 object CommandUtil {
     
+    /** 日志记录器 */
     val LOG = thisLogger()
 
+    /**
+     * 运行命令行并返回输出流
+     * @param command 命令及参数列表
+     * @param cwd 工作目录，默认为当前用户目录
+     * @param timeoutMillis 超时时间（毫秒），默认 120 秒
+     * @return 命令输出的 Flow，每行作为一个元素
+     * @throws RuntimeException 超时或执行失败时抛出
+     */
     fun run(
         command: List<String>,
         cwd: String? = System.getProperty("user.dir"),
@@ -65,6 +83,10 @@ object CommandUtil {
         }
     }
 
+    /**
+     * 获取当前操作系统信息，包括名称、架构路径和是否为 Windows
+     * @return 操作系统信息
+     */
     fun getOSInfo(): OSInfo {
         val osName = System.getProperty("os.name").lowercase()
         val osArch = System.getProperty("os.arch").lowercase()

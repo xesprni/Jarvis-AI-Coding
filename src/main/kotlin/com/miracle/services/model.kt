@@ -41,16 +41,28 @@ private val json = Json {
     coerceInputValues = true
 }
 
+/**
+ * 模型提供商枚举，定义支持的模型服务类型
+ */
 enum class ModelProvider(val code: String, val desc: String) {
     OPENAI_COMPATIBLE("OPENAI_COMPATIBLE", "自定义模型");
 
     companion object {
+        /**
+         * 根据提供商代码获取对应的枚举值
+         *
+         * @param code 提供商代码
+         * @return 对应的 ModelProvider 枚举值，未找到则返回 null
+         */
         fun fromCode(code: String): ModelProvider? {
             return entries.find { it.code == code }
         }
     }
 }
 
+/**
+ * 模型 API 协议类型，用于区分不同的接口风格
+ */
 @Serializable
 enum class ModelApiStyle(val desc: String) {
     CHAT_COMPLETIONS("Chat Completions"),
@@ -61,6 +73,9 @@ enum class ModelApiStyle(val desc: String) {
 
 private val REASONING_EFFORTS = setOf("low", "medium", "high", "xhigh")
 
+/**
+ * 模型配置数据类，包含模型连接和使用所需的全部参数
+ */
 @Serializable
 data class ModelConfig(
     @kotlinx.serialization.Transient
@@ -78,16 +93,36 @@ data class ModelConfig(
     @kotlinx.serialization.Transient
     var icon: Icon = AllIcons.Nodes.Plugin
 ) {
+    /** 模型的唯一标识，格式为 "提供商_模型名" */
     val id: String
         get() = "${provider}_${model}"
+    /** 模型的显示别名，未设置时返回模型名 */
     val alias: String
         get() = _alias ?: model
+    /** 解析后的 API 协议类型 */
     val resolvedApiStyle: ModelApiStyle
         get() = apiStyle
+    /** 解析后的推理努力等级，经过标准化处理 */
     val resolvedReasoningEffort: String?
         get() = normalizeReasoningEffort(reasoningEffort)
 
     companion object {
+        /**
+         * 工厂方法，用于构建 ModelConfig 实例
+         *
+         * @param provider 模型提供商
+         * @param model 模型名称
+         * @param contextTokens 上下文最大 token 数
+         * @param endpoint 接口地址
+         * @param apiKey API 密钥
+         * @param alias 显示别名
+         * @param apiStyle API 协议类型
+         * @param reasoningEffort 推理努力等级
+         * @param supportsImages 是否支持图片
+         * @param icon 模型图标
+         * @param maxOutputTokens 最大输出 token 数
+         * @return 构建好的 ModelConfig 实例
+         */
         fun from(
             provider: ModelProvider,
             model: String,
@@ -118,12 +153,28 @@ data class ModelConfig(
     }
 }
 
+/**
+ * LLM 查询选项，包含模型标识和流式输出等配置
+ *
+ * @param model 模型 ID
+ * @param streaming 是否启用流式输出
+ * @param toolUseContext 工具调用上下文，可选
+ */
 data class QueryLLMOptions(
     val model: String,
     val streaming: Boolean = false,
     val toolUseContext: ToolUseContext? = null // 可空类型对应可选属性
 )
 
+/**
+ * 执行聊天补全请求，将系统提示词与工具定义组合后调用 LLM
+ *
+ * @param messages 对话消息列表
+ * @param systemPrompt 系统提示词列表
+ * @param tools 可调用的工具列表
+ * @param options LLM 查询选项
+ * @return LLM 的聊天响应
+ */
 suspend fun chatCompletion(
     messages: List<ChatMessage>,
     systemPrompt: List<String> = emptyList(),
@@ -153,11 +204,23 @@ suspend fun chatCompletion(
     )
 }
 
+/**
+ * 根据模型 ID 获取流式聊天模型实例
+ *
+ * @param modelId 模型 ID
+ * @return 对应的流式聊天模型实例
+ */
 suspend fun getStreamChatModel(modelId: String): StreamingChatModel {
     val modelConfig = getModelConfig(modelId)
     return buildStreamingChatModel(modelConfig)
 }
 
+/**
+ * 根据模型 ID 获取同步聊天模型实例，仅支持 Chat Completions 协议
+ *
+ * @param modelId 模型 ID
+ * @return 同步聊天模型实例，不支持时返回 null
+ */
 suspend fun getChatModel(modelId: String): ChatModel? {
     val modelConfig = getModelConfig(modelId)
     return if (modelConfig.resolvedApiStyle != ModelApiStyle.CHAT_COMPLETIONS) null else buildChatModel(modelConfig)
@@ -167,6 +230,13 @@ suspend fun getChatModel(modelId: String): ChatModel? {
  * 获取模型列表
  */
 private var CUSTOM_MODELS: List<ModelConfig> = listOf()
+
+/**
+ * 加载所有模型配置，支持强制刷新缓存
+ *
+ * @param forceUpdate 是否强制从文件重新加载
+ * @return 以模型 ID 为键的模型配置映射
+ */
 suspend fun loadModelConfigs(forceUpdate: Boolean = false): Map<String, ModelConfig> {
     if (CUSTOM_MODELS.isEmpty() || forceUpdate) {
         CUSTOM_MODELS = loadCustomModelConfigs()
@@ -176,6 +246,11 @@ suspend fun loadModelConfigs(forceUpdate: Boolean = false): Map<String, ModelCon
     return modelConfigs.associateBy { it.id }
 }
 
+/**
+ * 从用户配置目录的 models.json 文件中加载自定义模型配置列表
+ *
+ * @return 自定义模型配置列表，加载失败返回空列表
+ */
 private fun loadCustomModelConfigs(): List<ModelConfig> {
     return runCatching {
         val modelFile = File(getUserConfigDirectory(), "models.json")
@@ -204,6 +279,19 @@ fun getCustomModels(): List<ModelConfig> {
     return loadCustomModelConfigs()
 }
 
+/**
+ * 添加自定义模型配置，并持久化到 models.json 文件
+ *
+ * @param model 模型名称
+ * @param endpoint 接口地址
+ * @param apiKey API 密钥
+ * @param contextTokens 上下文最大 token 数
+ * @param alias 显示别名
+ * @param apiStyle API 协议类型
+ * @param reasoningEffort 推理努力等级
+ * @param supportsImages 是否支持图片
+ * @throws IllegalArgumentException 模型已存在时抛出
+ */
 fun addCustomModel(
     model: String,
     endpoint: String,
@@ -256,10 +344,20 @@ fun deleteCustomModel(model: String) {
     modelFile.writeText(jsonText)
 }
 
+/**
+ * 获取当前选中的模型 ID
+ *
+ * @return 选中的模型 ID，未选中时返回 null
+ */
 fun getSelectedModelId(): String? {
     return JarvisCoreSettings.getInstance().selectedChatModelId
 }
 
+/**
+ * 设置当前选中的模型，并同步更新图片支持状态
+ *
+ * @param modelId 要选中的模型 ID，传入 null 取消选中
+ */
 fun setSelectedModel(modelId: String?) {
     val settings = JarvisCoreSettings.getInstance()
     settings.selectedChatModelId = modelId
@@ -267,6 +365,11 @@ fun setSelectedModel(modelId: String?) {
     settings.modelSupportsImages = selectedModel?.supportsImages ?: false
 }
 
+/**
+ * 获取当前选中的模型配置
+ *
+ * @return 选中的模型配置，未选中时返回 null
+ */
 fun getSelectedModel(): ModelConfig? {
     val modelId = JarvisCoreSettings.getInstance().selectedChatModelId ?: return null
     return getCustomModels().firstOrNull { it.id == modelId }
@@ -326,15 +429,33 @@ fun updateCustomModel(
     modelFile.writeText(jsonText)
 }
 
+/**
+ * 格式化推理努力等级为可读字符串
+ *
+ * @param reasoningEffort 原始推理努力等级
+ * @return 格式化后的字符串，为空时返回 "默认"
+ */
 fun formatReasoningEffort(reasoningEffort: String?): String {
     return normalizeReasoningEffort(reasoningEffort) ?: "默认"
 }
 
+/**
+ * 标准化推理努力等级，仅保留合法值
+ *
+ * @param reasoningEffort 原始推理努力等级
+ * @return 标准化后的合法值，不合法或为空时返回 null
+ */
 private fun normalizeReasoningEffort(reasoningEffort: String?): String? {
     val normalized = reasoningEffort?.trim()?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
     return normalized.takeIf { it in REASONING_EFFORTS }
 }
 
+/**
+ * 标准化模型配置，统一处理 API 协议类型和推理努力等级
+ *
+ * @param modelConfig 原始模型配置
+ * @return 标准化后的模型配置
+ */
 private fun normalizeModelConfig(modelConfig: ModelConfig): ModelConfig {
     return modelConfig.copy(
         apiStyle = modelConfig.resolvedApiStyle,
@@ -343,11 +464,25 @@ private fun normalizeModelConfig(modelConfig: ModelConfig): ModelConfig {
     )
 }
 
+/**
+ * 根据模型 ID 获取模型配置
+ *
+ * @param modelId 模型 ID
+ * @return 对应的模型配置
+ * @throws IllegalArgumentException 模型未找到时抛出
+ */
 private suspend fun getModelConfig(modelId: String): ModelConfig {
     val modelConfigs = loadModelConfigs()
     return modelConfigs[modelId] ?: throw IllegalArgumentException("model $modelId not found")
 }
 
+/**
+ * 执行聊天请求，优先使用同步模型，不支持时回退到流式模型收集完整响应
+ *
+ * @param modelId 模型 ID
+ * @param request 聊天请求
+ * @return 聊天响应
+ */
 suspend fun executeChatRequest(modelId: String, request: ChatRequest): ChatResponse {
     val modelConfig = getModelConfig(modelId)
     val chatModel = buildChatModel(modelConfig)
@@ -358,6 +493,12 @@ suspend fun executeChatRequest(modelId: String, request: ChatRequest): ChatRespo
     }
 }
 
+/**
+ * 根据模型配置构建同步聊天模型（仅支持 Chat Completions 协议）
+ *
+ * @param modelConfig 模型配置
+ * @return 同步聊天模型实例，协议不匹配时返回 null
+ */
 private fun buildChatModel(modelConfig: ModelConfig): ChatModel? {
     if (modelConfig.resolvedApiStyle != ModelApiStyle.CHAT_COMPLETIONS) return null
 
@@ -374,6 +515,12 @@ private fun buildChatModel(modelConfig: ModelConfig): ChatModel? {
     return builder.build()
 }
 
+/**
+ * 根据模型配置构建流式聊天模型，支持 Responses 和 Chat Completions 两种协议
+ *
+ * @param modelConfig 模型配置
+ * @return 流式聊天模型实例
+ */
 private fun buildStreamingChatModel(modelConfig: ModelConfig): StreamingChatModel {
     if (modelConfig.resolvedApiStyle == ModelApiStyle.RESPONSES) {
         val builder = OpenAiResponsesStreamingChatModel.builder()
@@ -421,6 +568,13 @@ private fun buildStreamingChatModel(modelConfig: ModelConfig): StreamingChatMode
     return builder.build()
 }
 
+/**
+ * 使用流式模型收集完整响应，通过 CompletableFuture 等待流式回调完成
+ *
+ * @param model 流式聊天模型
+ * @param request 聊天请求
+ * @return 完整的聊天响应
+ */
 private suspend fun completeChatWithStreamingModel(model: StreamingChatModel, request: ChatRequest): ChatResponse {
     val future = CompletableFuture<ChatResponse>()
     model.chat(

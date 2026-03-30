@@ -20,12 +20,17 @@ import java.nio.file.StandardCopyOption
 import javax.swing.Icon
 import javax.swing.text.JTextComponent
 
+/**
+ * UI 工具类，提供界面相关的辅助方法
+ */
 object UiUtil {
 
+    /** 日志记录器 */
     val LOG = thisLogger()
 
     /**
      * 设置 lookup 单击选中
+     * @param lookup 需要配置的 Lookup 组件
      */
     fun enableSingleClickSelection(lookup: LookupImpl) {
         val list = lookup.list // JList<LookupElement>
@@ -52,6 +57,13 @@ object UiUtil {
         })
     }
 
+    /**
+     * 从 URL 加载图标，支持本地缓存和自动缩放
+     * @param urlStr 图标的 URL 地址
+     * @param width 目标宽度，为 null 时保持原始尺寸
+     * @param cacheSeconds 缓存过期时间（秒），默认 1 小时
+     * @return 加载后的图标，失败时返回 null
+     */
     @JvmStatic
     @RequiresBackgroundThread
     fun loadIconFromUrl(urlStr: String, width: Int? = null, cacheSeconds: Int = 3600): Icon? {
@@ -82,6 +94,12 @@ object UiUtil {
     }
 
 
+    /**
+     * 按指定宽度缩放图标
+     * @param icon 原始图标
+     * @param width 目标宽度，为 null 时返回原始图标
+     * @return 缩放后的图标
+     */
     fun resizeIcon(icon: Icon?, width: Int?): Icon? {
         if (width == null || icon == null) return icon
         return if (icon is ScalableIcon) {
@@ -93,6 +111,11 @@ object UiUtil {
         }
     }
 
+    /**
+     * 从 URL 中提取文件扩展名
+     * @param url URL 地址
+     * @return 文件扩展名，包含点号（如 ".png"）
+     */
     private fun getExtension(url: String): String {
         val path = URL(url).path
         val lastDot = path.lastIndexOf('.')
@@ -117,6 +140,10 @@ object UiUtil {
         }
     }
 
+    /**
+     * 安全地清空文本组件内容
+     * @param component 需要清空的文本组件
+     */
     fun clearTextSafely(component: JTextComponent) {
         setTextSafely(component, "")
     }

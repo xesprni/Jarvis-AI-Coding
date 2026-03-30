@@ -54,6 +54,7 @@ data class TodoItem(
  */
 object TodoStorage {
 
+    /** 日志记录器 */
     val LOG = thisLogger()
     
     // 内存缓存: key = "convId_agentId", value = List<TodoItem>
@@ -140,6 +141,10 @@ object TodoStorage {
         return emptyList()
     }
 
+    /**
+     * 清除指定会话的所有内存缓存
+     * @param convId 会话 ID
+     */
     @JvmStatic
     fun clearConversationCache(convId: String) {
         val prefix = "${convId}_"

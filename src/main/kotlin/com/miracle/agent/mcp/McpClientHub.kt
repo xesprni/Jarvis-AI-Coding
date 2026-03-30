@@ -27,6 +27,7 @@ import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -34,39 +35,65 @@ import kotlin.time.Duration.Companion.seconds
  */
 @Service(Service.Level.PROJECT)
 class McpClientHub(private val project: Project) : Disposable {
+    /** 已连接的 MCP 客户端映射，key 为服务器名称 */
     private val clients: MutableMap<String, McpClient> = ConcurrentHashMap()
     private val serverStatus: MutableMap<String, Boolean> = ConcurrentHashMap() // true表示启用，false表示禁用
+    /** 服务器连接错误信息映射 */
     private val connectionErrors: MutableMap<String, String> = ConcurrentHashMap()
     private val scopeJob = SupervisorJob()
+    /** 连接协程作用域 */
     private val connectionScope = CoroutineScope(scopeJob + Dispatchers.IO)
+    /** 各服务器连接任务映射 */
     private val connectionJobs: MutableMap<String, Job> = ConcurrentHashMap()
+    /** 各服务器启用/禁用切换任务映射 */
     private val toggleJobs: MutableMap<String, Job> = ConcurrentHashMap()
+    /** 各服务器期望的切换状态 */
     private val desiredToggleState: MutableMap<String, Boolean> = ConcurrentHashMap()
     private var configMonitor: FileAlterationMonitor? = null
     private val configObservers: MutableList<FileAlterationObserver> = mutableListOf()
 
     @Volatile
+    /** 当前生效的 MCP 配置 */
     private var currentConfig: McpConfig = McpConfig()
 
     @Volatile
+    /** 是否已完成初始化 */
     private var initialized = false
+    /** 初始化锁 */
     private val initLock = Any()
+    /** 上次重新加载配置的时间戳 */
     private val lastReloadTimestamp = AtomicLong(0L)
     private val LOG = Logger.getInstance(McpClientHub::class.java)
 
     companion object {
-        private const val CONFIG_WATCH_INTERVAL_MS = 1000L
-        private const val CONFIG_FILE_NAME = "mcp_settings.json"
-        private const val TOGGLE_DEBOUNCE_MS = 200L
-        const val MCP_SERVER_PREFIX = "mcp__"
-        val MCP_CONFIG_TOPIC: Topic<McpConfigListener> = Topic.create(
+    /** 配置文件轮询监听间隔（毫秒） */
+    private const val CONFIG_WATCH_INTERVAL_MS = 1000L
+    /** 配置文件名 */
+    private const val CONFIG_FILE_NAME = "mcp_settings.json"
+    /** 启用/禁用操作防抖间隔（毫秒） */
+    private const val TOGGLE_DEBOUNCE_MS = 200L
+    /** MCP 工具名称前缀 */
+    const val MCP_SERVER_PREFIX = "mcp__"
+    /** MCP 配置变更事件 Topic */
+    val MCP_CONFIG_TOPIC: Topic<McpConfigListener> = Topic.create(
             "qifu-mcp-config-events",
             McpConfigListener::class.java
         )
 
+        /**
+         * 获取指定项目的 McpClientHub 实例
+         *
+         * @param project IntelliJ 项目实例
+         * @return 该项目的 McpClientHub 服务实例
+         */
         @JvmStatic
         fun getInstance(project: Project): McpClientHub = project.service()
 
+        /**
+         * 静态实例化当前项目所有已连接 MCP 工具对应的 Agent Tool 实例
+         *
+         * @return Tool 实例列表，无活跃项目时返回空列表
+         */
         @JvmStatic
         fun instantiate(): List<com.miracle.agent.tool.Tool<*>> {
             val currentProject = getCurrentProject()?.takeIf { true } ?: return emptyList()
@@ -97,6 +124,9 @@ class McpClientHub(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * 确保已初始化，若未初始化则执行初始化
+     */
     fun ensureInitialized() {
         if (!initialized) {
             initialize()
@@ -218,11 +248,17 @@ class McpClientHub(private val project: Project) : Disposable {
         updateServerEnabledState(serverName, enable = false)
     }
 
+    /**
+     * 更新服务器启用/禁用状态，带防抖机制
+     *
+     * @param serverName 服务器名称
+     * @param enable true 为启用，false 为禁用
+     */
     private fun updateServerEnabledState(serverName: String, enable: Boolean) {
         desiredToggleState[serverName] = enable
         toggleJobs.remove(serverName)?.cancel()
         val job = connectionScope.launch {
-            delay(TOGGLE_DEBOUNCE_MS)
+            delay(TOGGLE_DEBOUNCE_MS.milliseconds)
             val target = desiredToggleState[serverName]
             if (!isActive || (target != null && target != enable)) {
                 return@launch
@@ -295,6 +331,11 @@ class McpClientHub(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * 卸载指定的 MCP 服务器，同时从用户级和项目级配置文件中移除
+     *
+     * @param serverName 待卸载的服务器名称
+     */
     fun uninstallMcpServer(serverName: String) {
         val userConfigFile = Paths.get(
             getUserConfigDirectory(), MCP_CONFIG_DIRECTORY,
@@ -316,6 +357,13 @@ class McpClientHub(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * 判断是否需要通知配置重新加载事件
+     *
+     * @param configChanged 配置文件是否有变化
+     * @param removedFromRuntime 运行时是否有移除操作
+     * @return 是否需要发送通知
+     */
     private fun shouldNotifyConfigReload(configChanged: Boolean, removedFromRuntime: Boolean): Boolean {
         if (!configChanged && !removedFromRuntime) {
             return false
@@ -333,6 +381,11 @@ class McpClientHub(private val project: Project) : Disposable {
         return serverStatus.toMap()
     }
 
+    /**
+     * 获取所有服务器的连接错误信息
+     *
+     * @return 服务器名称到错误信息的映射
+     */
     fun getConnectionErrors(): Map<String, String> {
         return connectionErrors.toMap()
     }
@@ -351,7 +404,12 @@ class McpClientHub(private val project: Project) : Disposable {
         return clients.toMap()
     }
 
-    //get service config
+    /**
+     * 获取指定服务器的配置信息
+     *
+     * @param serverName 服务器名称
+     * @return 服务器配置，不存在时返回 null
+     */
     fun getServerConfig(serverName: String): McpServerConfig? {
         return McpConfigManager.getServerConfig(project, serverName)
     }
@@ -573,6 +631,12 @@ class McpClientHub(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * 通知配置变更事件，触发 UI 面板刷新
+     *
+     * @param refreshStatusPanel 是否刷新状态面板
+     * @param refreshMarketPanel 是否刷新市场面板
+     */
     @Suppress("SameParameterValue")
     private fun notifyConfigReloaded(
         refreshStatusPanel: Boolean = true,
@@ -654,6 +718,11 @@ class McpClientHub(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * 等待指定服务器的连接任务完成
+     *
+     * @param serverName 服务器名称
+     */
     private suspend fun waitForConnectionJob(serverName: String) {
         try {
             connectionJobs[serverName]?.takeIf { it.isActive }?.join()
@@ -664,6 +733,12 @@ class McpClientHub(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * 重新连接指定服务器
+     *
+     * @param serverName 服务器名称
+     * @return 重连是否成功
+     */
     private suspend fun reconnectServer(serverName: String): Boolean {
         val restarted = restartServer(serverName)
         if (!restarted) {
@@ -679,14 +754,32 @@ class McpClientHub(private val project: Project) : Disposable {
 
 }
 
+/**
+ * 判断 MCP 服务器配置是否处于启用状态
+ *
+ * @receiver McpServerConfig 服务器配置
+ * @return 未显式禁用时返回 true
+ */
 private fun McpServerConfig.isEnabled(): Boolean {
     return disabled != true
 }
 
+/**
+ * 去除不影响运行时连接的字段，用于配置对比
+ *
+ * @receiver McpServerConfig 服务器配置
+ * @return 标准化后的配置副本
+ */
 private fun McpServerConfig.normalizedForRuntime(): McpServerConfig {
     return copy(disabled = null, space = null)
 }
 
+/**
+ * 根据配置中的 command 和 url 字段自动推断并补全传输类型
+ *
+ * @receiver McpServerConfig 服务器配置
+ * @return 补全 type 字段后的配置副本
+ */
 private fun McpServerConfig.withResolvedType(): McpServerConfig {
     val resolvedType = when {
         type.isNotBlank() -> type
@@ -697,6 +790,9 @@ private fun McpServerConfig.withResolvedType(): McpServerConfig {
     return copy(type = resolvedType)
 }
 
+/**
+ * MCP 配置变更监听接口，用于在配置文件发生变化时通知 UI 层
+ */
 fun interface McpConfigListener {
     fun onConfigUpdated(project: Project, refreshStatusPanel: Boolean, refreshMarketPanel: Boolean)
 }

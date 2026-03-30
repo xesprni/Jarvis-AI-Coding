@@ -30,11 +30,20 @@ import javax.swing.plaf.basic.BasicComboBoxUI
 import com.intellij.util.ui.JBFont
 import java.awt.BorderLayout
 
+/**
+ * 模型下拉框的数据项，包含模型 ID 和显示标签。
+ *
+ * @property id 模型唯一标识
+ * @property label 模型显示名称
+ */
 // ── Data class for model combo box items ─────────────────────────────
 internal data class ModelItem(val id: String, val label: String) {
     override fun toString(): String = label
 }
 
+/**
+ * 模型下拉框的自定义渲染器，处理选中态和下拉列表项的样式。
+ */
 // ── Custom renderer for model items ──────────────────────────────────
 internal class ModelItemRenderer : javax.swing.DefaultListCellRenderer() {
     override fun getListCellRendererComponent(
@@ -61,6 +70,9 @@ internal class ModelItemRenderer : javax.swing.DefaultListCellRenderer() {
     }
 }
 
+/**
+ * 聊天模式下拉框的自定义渲染器，处理选中态和下拉列表项的样式。
+ */
 // ── Custom renderer for chat mode items ──────────────────────────────
 internal class ChatModeRenderer : javax.swing.DefaultListCellRenderer() {
     override fun getListCellRendererComponent(
@@ -87,6 +99,9 @@ internal class ChatModeRenderer : javax.swing.DefaultListCellRenderer() {
     }
 }
 
+/**
+ * 自定义下拉框 UI，替换默认箭头按钮并设置透明背景。
+ */
 // ── Custom ComboBox UI that replaces the arrow button ────────────────
 internal class SelectorComboBoxUI : BasicComboBoxUI() {
     override fun createArrowButton(): JButton {
@@ -104,6 +119,12 @@ internal class SelectorComboBoxUI : BasicComboBoxUI() {
     }
 }
 
+/**
+ * 为下拉框应用统一的样式配置，包括透明背景、圆角和鼠标指针。
+ *
+ * @param T 下拉框数据类型
+ * @param comboBox 目标下拉框
+ */
 // ── Utility to apply standard styling to a selector combo box ────────
 internal fun <T> styleSelectorComboBox(comboBox: JComboBox<T>) {
     comboBox.ui = SelectorComboBoxUI()
@@ -122,8 +143,17 @@ internal fun <T> styleSelectorComboBox(comboBox: JComboBox<T>) {
     comboBox.maximumRowCount = 12
 }
 
+/**
+ * 将下拉框包装在一个带有悬停/按下效果的面板中。
+ *
+ * @param comboBox 目标下拉框
+ * @return 包装后的面板
+ */
 internal fun wrapSelectorComboBox(comboBox: JComboBox<*>): JPanel = SelectorChromePanel(comboBox)
 
+/**
+ * 下拉框的外壳面板，提供悬停和按下时的圆角背景效果。
+ */
 private class SelectorChromePanel(
     private val comboBox: JComboBox<*>,
 ) : JPanel(BorderLayout()) {
@@ -219,6 +249,9 @@ private class SelectorChromePanel(
     }
 }
 
+/**
+ * 下拉框的自定义箭头按钮，仅绘制箭头图标。
+ */
 private class SelectorArrowButton(
     private val arrowIcon: Icon,
 ) : JButton() {

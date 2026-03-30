@@ -40,7 +40,41 @@ import java.util.*
 import java.util.concurrent.CompletableFuture
 import kotlin.math.min
 
-// ---------------- data class
+/**
+ * 任务状态数据类，保存单次 Agent 任务运行期间的所有状态信息
+ *
+ * @param taskId 任务唯一标识
+ * @param convId 会话唯一标识
+ * @param userMessageId 用户消息 ID
+ * @param chatMemory 聊天消息存储
+ * @param chatHistory 聊天历史记录存储
+ * @param tools 可用工具映射
+ * @param modelId 当前使用的模型 ID
+ * @param chatMode 聊天模式
+ * @param agentId Agent 标识
+ * @param complete 任务是否已结束
+ * @param abort 任务是否被中断
+ * @param project IntelliJ 项目实例
+ * @param apiRequestCount 当前已发起的 API 请求数
+ * @param consecutiveMistakeCount 连续错误次数
+ * @param aiMessageFuture 用于等待模型响应完成的 Future
+ * @param askFutures 等待用户回答的 Future 映射
+ * @param waitingAskUserQuestion 是否正在等待用户回答问题
+ * @param askUserResponse 用户的回答内容
+ * @param toolCallFutures 工具调用结果的 Future 列表
+ * @param emit 给 UI 发送事件的消息回调
+ * @param refreshToolSpecs 刷新工具规范的回调
+ * @param systemReminderService 系统提示服务
+ * @param fileFreshnessService 文件新鲜度服务
+ * @param subTask 子任务
+ * @param shell 持久化的 Shell 实例
+ * @param shellCreateException Shell 创建时的异常
+ * @param historyAiMessage 历史助手消息
+ * @param mcpPrompt MCP 提示词
+ * @param curMessageId 当前消息 ID
+ * @param modelConfig 当前模型配置
+ * @param toolRequestLog 工具调用日志
+ */
 data class TaskState(
     val taskId: String,
     val convId: String,
@@ -81,6 +115,9 @@ data class TaskState(
     var modelConfig: ModelConfig? = null,
     var toolRequestLog: AgentTraceLog? = null,  // 工具调用前保存，参数校验通过后需要更新（存储sub_agent, mcp等额外字段）
 ) {
+    /**
+     * 已缓存的服务信息，用于同一任务的多次请求间复用
+     */
     private data class CachedServices(
         val convId: String,
         val agentId: String,
@@ -92,6 +129,11 @@ data class TaskState(
     companion object {
         private val serviceCache = mutableMapOf<String, CachedServices>()
 
+        /**
+         * 清除指定任务缓存的服务实例，并重置其会话状态
+         *
+         * @param taskId 要清除缓存的任务 ID
+         */
         @JvmStatic
         @Synchronized
         fun clearCachedServices(taskId: String) {
@@ -381,6 +423,11 @@ class Task(
         close()
     }
 
+    /**
+     * 按需刷新模型实例，当模型 ID 变更时重新创建 StreamingChatModel
+     *
+     * @param force 是否强制刷新模型实例
+     */
     private suspend fun refreshModelIfNeeded(force: Boolean = false) {
         val desiredModelId = taskState.modelId
         if (!force && desiredModelId == currentModelId && model != null && taskState.modelConfig != null) return
@@ -401,6 +448,12 @@ class Task(
         toolSpecs = ToolRegistry.getToolSpecifications(taskState.tools.values.toList())
     }
 
+    /**
+     * 校验当前会话是否包含图片且模型是否支持图片，不支持则抛出异常
+     *
+     * @param modelConfig 模型配置
+     * @param project IntelliJ 项目实例
+     */
     private fun validateImageSupport(modelConfig: ModelConfig, project: Project) {
         val conversationId = convId ?: return
         val conversation = ConversationStore.getConversation(project, conversationId) ?: return
@@ -409,7 +462,11 @@ class Task(
         }
     }
 
-    // 发起模型请求
+    /**
+     * 发起模型请求并返回 AiMessage，包含上下文压缩、系统提示注入等预处理逻辑
+     *
+     * @return 模型响应的 AiMessage，如果响应为空或异常则返回 null
+     */
     private suspend fun recursivelyMakeJarvisRequests(): AiMessage? {
         taskState.apiRequestCount++
 
@@ -474,7 +531,11 @@ class Task(
         return aiMessage
     }
 
-    // 检查是否超过了自动允许的api请求数
+    /**
+     * 检查是否超过了自动允许的 API 请求数上限，超过时向用户询问是否继续
+     *
+     * @return true 表示已超过上限且用户选择停止，false 表示可以继续
+     */
     private suspend fun isOverAutoAllowLimit(): Boolean {
         val maxApiRequestCount = AutoApproveSettings.state.maxRequests
         if (taskState.apiRequestCount >= maxApiRequestCount) {
@@ -577,6 +638,11 @@ class Task(
         taskState.subTask?.switchModel(newModelId)
     }
 
+    /**
+     * 接收用户对询问的回答，并将其传递给对应的 askFuture
+     *
+     * @param response 用户的回答
+     */
     fun askResponse(response: AskResponse) {
             taskState.subTask?.let {
             taskState.subTask!!.askResponse(response)

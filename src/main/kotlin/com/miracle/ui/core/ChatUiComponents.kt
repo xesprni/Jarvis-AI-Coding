@@ -15,8 +15,12 @@ import javax.swing.JPanel
 import javax.swing.border.AbstractBorder
 import javax.swing.border.Border
 
-// ── Shared utility functions used across the chat UI ─────────────────
-
+/**
+ * 将文本中的 HTML 特殊字符转义为对应的实体，防止在 HTML 渲染时被解析。
+ *
+ * @param text 原始文本
+ * @return 转义后的安全文本
+ */
 internal fun escapeHtml(text: String): String {
     return text
         .replace("&", "&amp;")
@@ -25,6 +29,12 @@ internal fun escapeHtml(text: String): String {
         .replace("\"", "&quot;")
 }
 
+/**
+ * 创建一个圆角边框，使用指定颜色进行绘制。
+ *
+ * @param color 边框颜色
+ * @return 圆角边框实例
+ */
 internal fun createRoundedBorder(color: Color): Border {
     return object : AbstractBorder() {
         override fun paintBorder(c: Component, g: java.awt.Graphics, x: Int, y: Int, width: Int, height: Int) {
@@ -43,15 +53,33 @@ internal fun createRoundedBorder(color: Color): Border {
     }
 }
 
+/**
+ * 将文本复制到系统剪贴板。
+ *
+ * @param text 要复制的文本内容
+ */
 internal fun copyToClipboard(text: String) {
     val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
     clipboard.setContents(java.awt.datatransfer.StringSelection(text), null)
 }
 
+/**
+ * 将 Unix 时间戳（毫秒）格式化为可读的时间字符串。
+ *
+ * @param epochMillis 毫秒级 Unix 时间戳
+ * @return 格式化后的时间字符串
+ */
 internal fun formatTimestamp(epochMillis: Long): String {
     return ChatTheme.TIMESTAMP_FORMATTER.format(java.time.Instant.ofEpochMilli(epochMillis))
 }
 
+/**
+ * 创建一个仅包含图标的按钮，无边框、无背景填充，适用于工具栏图标操作。
+ *
+ * @param icon 按钮图标
+ * @param tooltip 鼠标悬停提示文本
+ * @return 配置好的图标按钮
+ */
 internal fun createIconButton(icon: javax.swing.Icon, tooltip: String): JButton {
     return JButton(icon).apply {
         isOpaque = false
@@ -67,6 +95,14 @@ internal fun createIconButton(icon: javax.swing.Icon, tooltip: String): JButton 
     }
 }
 
+/**
+ * 创建一个用于顶部工具栏的图标按钮，点击时执行指定操作。
+ *
+ * @param icon 按钮图标
+ * @param tooltip 鼠标悬停提示文本
+ * @param action 点击回调
+ * @return 配置好的工具栏图标按钮
+ */
 internal fun createHeaderIconButton(icon: javax.swing.Icon, tooltip: String, action: () -> Unit): JButton {
     return JButton(icon).apply {
         isOpaque = false
@@ -80,6 +116,14 @@ internal fun createHeaderIconButton(icon: javax.swing.Icon, tooltip: String, act
     }
 }
 
+/**
+ * 创建一个纯文本的顶部工具栏按钮，点击时执行指定操作。
+ *
+ * @param text 按钮文本
+ * @param tooltip 鼠标悬停提示文本
+ * @param action 点击回调
+ * @return 配置好的文本按钮
+ */
 internal fun createHeaderTextButton(text: String, tooltip: String, action: () -> Unit): JButton {
     return JButton(text).apply {
         isOpaque = false
@@ -94,6 +138,15 @@ internal fun createHeaderTextButton(text: String, tooltip: String, action: () ->
     }
 }
 
+/**
+ * 创建一个带有圆角边框的徽章标签，常用于显示状态标签。
+ *
+ * @param text 标签文本
+ * @param background 背景色
+ * @param foreground 前景色
+ * @param borderColor 边框颜色
+ * @return 配置好的标签组件
+ */
 internal fun createBadgeLabel(
     text: String,
     background: Color,
@@ -112,6 +165,9 @@ internal fun createBadgeLabel(
     }
 }
 
+/**
+ * 操作按钮的配色方案，包含默认态和悬停态的背景色与边框色。
+ */
 internal data class ActionPalette(
     val background: Color,
     val hoverBackground: Color,
@@ -120,6 +176,15 @@ internal data class ActionPalette(
     val foreground: Color,
 )
 
+/**
+ * 创建一个操作按钮，支持主要（primary）和次要两种样式。
+ *
+ * @param text 按钮文本
+ * @param tooltip 鼠标悬停提示文本
+ * @param primary 是否使用主要样式，默认 false
+ * @param action 点击回调
+ * @return 配置好的操作按钮
+ */
 internal fun createActionButton(
     text: String,
     tooltip: String,
@@ -146,6 +211,16 @@ internal fun createActionButton(
     return createStyledActionButton(text, tooltip, palette, compact = false, bold = true, action = action)
 }
 
+/**
+ * 创建一个选项芯片按钮，使用次要样式，常用于快捷回复选项。
+ *
+ * @param text 按钮文本
+ * @param tooltip 鼠标悬停提示文本
+ * @param verticalPadding 垂直内边距，默认 4
+ * @param horizontalPadding 水平内边距，默认 8
+ * @param action 点击回调
+ * @return 配置好的芯片按钮
+ */
 internal fun createOptionChipButton(
     text: String,
     tooltip: String,
@@ -172,6 +247,14 @@ internal fun createOptionChipButton(
     )
 }
 
+/**
+ * 创建一个批准操作按钮，使用绿色主题配色。
+ *
+ * @param text 按钮文本
+ * @param tooltip 鼠标悬停提示文本
+ * @param action 点击回调
+ * @return 配置好的批准按钮
+ */
 internal fun createApproveButton(text: String, tooltip: String, action: () -> Unit): JButton {
     return createStyledActionButton(
         text = text,
@@ -189,6 +272,14 @@ internal fun createApproveButton(text: String, tooltip: String, action: () -> Un
     )
 }
 
+/**
+ * 创建一个拒绝操作按钮，使用红色主题配色。
+ *
+ * @param text 按钮文本
+ * @param tooltip 鼠标悬停提示文本
+ * @param action 点击回调
+ * @return 配置好的拒绝按钮
+ */
 internal fun createRejectButton(text: String, tooltip: String, action: () -> Unit): JButton {
     return createStyledActionButton(
         text = text,
@@ -206,6 +297,19 @@ internal fun createRejectButton(text: String, tooltip: String, action: () -> Uni
     )
 }
 
+/**
+ * 根据配色方案创建带样式的操作按钮，支持悬停变色效果。
+ *
+ * @param text 按钮文本
+ * @param tooltip 鼠标悬停提示文本
+ * @param palette 配色方案
+ * @param compact 是否使用紧凑模式
+ * @param bold 是否使用粗体
+ * @param verticalPadding 垂直内边距
+ * @param horizontalPadding 水平内边距
+ * @param action 点击回调
+ * @return 配置好的按钮
+ */
 private fun createStyledActionButton(
     text: String,
     tooltip: String,
@@ -249,6 +353,11 @@ private fun createStyledActionButton(
     }
 }
 
+/**
+ * 创建一个垂直方向的工具栏分隔线。
+ *
+ * @return 分隔线面板
+ */
 internal fun createToolbarSeparator(): JPanel {
     return JPanel().apply {
         isOpaque = true
@@ -259,6 +368,13 @@ internal fun createToolbarSeparator(): JPanel {
     }
 }
 
+/**
+ * 消息卡片的外壳容器，包含根面板、内容区和头部面板。
+ *
+ * @property root 根面板
+ * @property body 消息内容区面板
+ * @property header 消息头部面板（包含作者信息、操作按钮等）
+ */
 // ── MessageShell data holder ─────────────────────────────────────────
 internal data class MessageShell(
     val root: JPanel,

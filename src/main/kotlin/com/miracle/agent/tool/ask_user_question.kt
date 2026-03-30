@@ -14,9 +14,12 @@ import dev.langchain4j.model.chat.request.json.JsonStringSchema
 import kotlinx.serialization.json.*
 import kotlin.reflect.KFunction
 
+/**
+ * 向用户提问的工具，支持提供选项列表供用户选择
+ */
 object AskUserQuestionTool: Tool<String> {
 
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("AskUserQuestion")
         .description("""Use this tool when you need to ask the user questions during execution. This allows you to:
 1. Gather user preferences or requirements
@@ -41,18 +44,38 @@ object AskUserQuestionTool: Tool<String> {
         .build()
 
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: String): String {
         return output
     }
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<String>> {
         return ::execute
     }
 
+    /**
+     * 执行用户提问操作，获取用户的答复
+     * @param taskState 当前任务状态
+     * @param question 要提问的问题
+     * @param options 可供选择的选项列表
+     * @return 工具调用结果
+     */
     fun execute(taskState: TaskState, question: String, options: List<String> = emptyList()): ToolCallResult<String> {
         val userAnswer = taskState.askUserResponse!!
         val answer = taskState.askUserResponse?.let { "<answer>$it</answer>" } ?: "用户未答复内容"
@@ -85,6 +108,11 @@ object AskUserQuestionTool: Tool<String> {
         )
     }
 
+    /**
+     * 校验工具输入参数
+     * @param input 工具输入参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         (input as JsonObject).let {
             it["question"]?.jsonPrimitive?.contentOrNull ?: throw MissingToolParameterException(getName(), "question")
@@ -92,6 +120,14 @@ object AskUserQuestionTool: Tool<String> {
         }
     }
 
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         if (isPartial) return null
 

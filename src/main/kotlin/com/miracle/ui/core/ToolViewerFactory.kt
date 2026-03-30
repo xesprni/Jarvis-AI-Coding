@@ -53,6 +53,12 @@ internal class ToolViewerFactory(
 
     // ── Tool body dispatcher ─────────────────────────────────────────
 
+    /**
+     * 根据工具段类型创建对应的工具内容查看器。
+     *
+     * @param segment 工具段
+     * @return 对应的 Swing 查看器组件
+     */
     fun createToolBody(segment: ToolSegment): JComponent {
         return when (segment.name) {
             UiToolName.RUN_COMMAND, UiToolName.COMMAND_OUTPUT ->
@@ -86,6 +92,12 @@ internal class ToolViewerFactory(
 
     // ── Tool tips header ─────────────────────────────────────────────
 
+    /**
+     * 创建工具提示头部，包含图标和标题文本。
+     *
+     * @param header 工具头部信息
+     * @return 头部面板组件
+     */
     fun createToolTipsHeader(header: com.miracle.agent.parser.ToolHeader): JComponent {
         val htmlText = """
             <html>
@@ -107,6 +119,13 @@ internal class ToolViewerFactory(
 
     // ── Small section header ─────────────────────────────────────────
 
+    /**
+     * 创建带有图标的小节标题标签。
+     *
+     * @param text 标题文本
+     * @param icon 标题图标
+     * @return 标签组件
+     */
     fun createSmallSectionLabel(text: String, icon: javax.swing.Icon): JComponent {
         return JBLabel(text, icon, SwingConstants.LEFT).apply {
             font = JBFont.small(); foreground = MUTED_FOREGROUND
@@ -116,6 +135,12 @@ internal class ToolViewerFactory(
 
     // ── Tool title resolution ────────────────────────────────────────
 
+    /**
+     * 根据工具段类型解析显示标题。
+     *
+     * @param segment 工具段
+     * @return 解析后的标题字符串
+     */
     fun resolveToolTitle(segment: ToolSegment): String {
         return when (segment.name) {
             UiToolName.RUN_COMMAND, UiToolName.COMMAND_OUTPUT -> "$ ${segment.toolCommand}"
@@ -133,6 +158,12 @@ internal class ToolViewerFactory(
 
     // ── Syntax detection ─────────────────────────────────────────────
 
+    /**
+     * 根据文件扩展名检测语法高亮类型。
+     *
+     * @param filePath 文件路径
+     * @return RSyntaxTextArea 语法常量
+     */
     fun detectSyntax(filePath: String): String {
         return when {
             filePath.endsWith(".java", true) -> SyntaxConstants.SYNTAX_STYLE_JAVA

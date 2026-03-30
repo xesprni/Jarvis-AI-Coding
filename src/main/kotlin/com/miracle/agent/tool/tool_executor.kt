@@ -36,13 +36,24 @@ import kotlin.reflect.full.callSuspendBy
 import kotlin.reflect.jvm.isAccessible
 
 
+/**
+ * 工具执行器，负责工具调用请求的校验、参数转换、用户授权和实际执行。
+ * 处理工具调用的完整生命周期：参数语法修复 -> 参数校验 -> 用户授权 -> 参数转换 -> 执行 -> 结果返回。
+ */
 object ToolExecutor{
 
     private val LOG = Logger.getInstance(ToolExecutor::class.java)
+    // JSON 解析器实例，忽略未知键以兼容不同版本的工具参数
     private val json = Json {
         ignoreUnknownKeys = true
     }
 
+    /**
+     * 检查工具是否存在
+     * @param toolRequest 工具调用请求
+     * @param taskState 当前任务状态
+     * @return 工具实例，不存在时返回 null
+     */
     fun checkToolExists(toolRequest: ToolExecutionRequest, taskState: TaskState): Tool<*>? {
         val tool = taskState.tools[toolRequest.name()]
         if (tool == null) {
@@ -116,6 +127,13 @@ object ToolExecutor{
         return true
     }
 
+    /**
+     * 替换聊天记录中 AI 消息里指定工具请求的参数内容
+     * @param chatMemory 聊天记忆存储
+     * @param args 新的参数 JSON 字符串
+     * @param curToolRequest 当前工具请求
+     * @return 更新后的工具请求
+     */
     private fun replaceToolCallParams(chatMemory: ChatMessageStore<ChatMessage>, args: String, curToolRequest: ToolExecutionRequest): ToolExecutionRequest {
         var messages = chatMemory.messages()
         val aiMessageIndex = messages.indexOfLast { it is AiMessage }.takeIf { it != -1 } ?: return curToolRequest
@@ -140,6 +158,14 @@ object ToolExecutor{
         }
     }
 
+    /**
+     * 记录工具调用错误信息，包括 UI 展示和 AI 上下文
+     * @param taskState 当前任务状态
+     * @param toolRequestId 工具请求 ID
+     * @param toolName 工具名称
+     * @param aiErrorMsg 返回给 AI 的错误信息
+     * @param uiErrorMsg 展示给用户的错误信息（可选）
+     */
     private fun toolCallError(taskState: TaskState, toolRequestId: String, toolName: String, aiErrorMsg: String, uiErrorMsg: String? = null) {
         uiErrorMsg?.let {
             taskState.emit!!(JarvisSay(toolRequestId, AgentMessageType.ERROR, listOf(ErrorSegment(uiErrorMsg))))
@@ -319,6 +345,12 @@ object ToolExecutor{
         return true
     }
 
+    /**
+     * 在工具执行完成后，为 Write/Edit 工具记录文件检查点
+     * @param toolRequest 工具调用请求
+     * @param taskState 当前任务状态
+     * @param toolSegment 工具展示片段
+     */
     private fun recordCheckpointForWriteEdit(toolRequest: ToolExecutionRequest, taskState: TaskState, toolSegment: ToolSegment) {
         if ((toolRequest.name() == WriteTool.getName() || toolRequest.name() == EditTool.getName()) &&
             !taskState.userMessageId.isNullOrBlank()

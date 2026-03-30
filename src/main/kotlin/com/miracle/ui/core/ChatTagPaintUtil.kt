@@ -11,11 +11,24 @@ import java.awt.RenderingHints
 import java.awt.geom.RoundRectangle2D
 import javax.swing.JComponent
 
+/**
+ * 聊天标签绘制工具，提供圆角背景和边框的绘制方法。
+ */
 internal object ChatTagPaintUtil {
+    /** 圆角宽度 */
     private const val ARC_WIDTH = 8f
+    /** 圆角高度 */
     private const val ARC_HEIGHT = 8f
+    /** 边框线宽 */
     private const val STROKE_WIDTH = 1f
 
+    /**
+     * 在指定组件上绘制圆角背景和边框，选中时使用实线，未选中时使用虚线。
+     *
+     * @param g 图形上下文
+     * @param component 目标组件
+     * @param selected 是否选中状态，默认 true
+     */
     fun drawRoundedBackground(
         g: Graphics,
         component: JComponent,

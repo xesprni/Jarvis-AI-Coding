@@ -20,11 +20,14 @@ import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 import kotlin.reflect.KFunction
 
+/**
+ * Write 工具的输出结果
+ */
 data class WriteToolOutput(
-    val type: String = "create",
-    val filePath: String,
-    val content: String,
-    val structuredPatch: List<Hunk> = emptyList(),  // diff结构中的变更片段
+    val type: String = "create", // 操作类型："create" 或 "update"
+    val filePath: String, // 文件路径
+    val content: String, // 写入的内容
+    val structuredPatch: List<Hunk> = emptyList(), // diff结构中的变更片段
 )
 
 /**
@@ -33,7 +36,7 @@ data class WriteToolOutput(
 object WriteTool: Tool<WriteToolOutput> {
 
     private val LOG = Logger.getInstance(WriteTool::class.java)
-    const val MAX_LINES_TO_RENDER_FOR_ASSISTANT = 20
+    const val MAX_LINES_TO_RENDER_FOR_ASSISTANT = 20 // 返回给 AI 的最大渲染行数
     const val TRUNCATED_MESSAGE = "\n...[truncated]"
     val SPEC = ToolSpecification.builder()
         .name("Write")
@@ -54,14 +57,27 @@ Usage:
             .build())
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return Write 工具的规格定义
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<WriteToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出渲染为返回给 AI 的文本
+     * @param output Write 工具输出结果
+     * @return 格式化后的结果文本
+     */
     override fun renderResultForAssistant(output: WriteToolOutput): String {
         return when(output.type) {
             "create" -> "File created successfully at: ${output.filePath}"
@@ -79,6 +95,14 @@ Usage:
         }
     }
 
+    /**
+     * 执行文件写入操作
+     * @param file_path 文件绝对路径
+     * @param content 要写入的内容
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(file_path: String, content: String, taskState: TaskState, toolRequest: ToolExecutionRequest): ToolCallResult<WriteToolOutput> {
         // 如果用户修改了内容，则提前返回
         taskState.askUserResponse?.let {
@@ -112,6 +136,13 @@ Usage:
         )
     }
 
+    /**
+     * 处理用户在 diff 窗口中修改后的内容
+     * @param filePath 文件路径
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     fun handleUserModifiedContent(
         filePath: String,
         taskState: TaskState,
@@ -143,6 +174,11 @@ Usage:
         )
     }
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         (input as JsonObject).let {
             val filePath = it["file_path"]?.jsonPrimitive?.contentOrNull ?: return
@@ -167,6 +203,14 @@ Usage:
         }
     }
 
+    /**
+     * 处理工具参数流式返回，构建 UI 展示片段，并在需要时显示 diff 窗口
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段
+     */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         var filePath = partialArgs["file_path"]?.takeIf { it.isComplete }?.value ?: return null
         filePath = normalizeFilePath(filePath, taskState.project)
@@ -215,6 +259,11 @@ Usage:
     }
 
 
+    /**
+     * 确保在 Plan 模式下不允许写入操作
+     * @param filePath 文件路径
+     * @param taskState 当前任务状态
+     */
     private fun ensurePlanWriteAllowed(filePath: String, taskState: TaskState) {
         if (taskState.chatMode != ChatMode.PLAN) return
         throw ToolExecutionException("Write is unavailable in Plan mode.")

@@ -22,18 +22,18 @@ import kotlin.reflect.KFunction
  * 解析后的类信息
  */
 data class ResolvedClassInfo(
-    val fqn: String,
-    val type: String,
-    val source: String
+    val fqn: String, // 类的完全限定名
+    val type: String, // 类型（class/interface/enum/annotation）
+    val source: String // 来源（project/dependency）
 )
 
 /**
  * 工具输出数据
  */
 data class ResolveClassNameOutput(
-    val results: List<ResolvedClassInfo>,
-    val truncated: Boolean,
-    val durationMs: Long,
+    val results: List<ResolvedClassInfo>, // 解析结果列表
+    val truncated: Boolean, // 结果是否被截断
+    val durationMs: Long, // 查询耗时（毫秒）
 )
 
 /**
@@ -92,11 +92,14 @@ fun resolveClassName(project: Project, name: String): List<ResolvedClassInfo> {
     return result.distinctBy { it.fqn }
 }
 
+/**
+ * 类名解析工具，支持通过简单名称或完全限定名查找 Java 类
+ */
 object ResolveClassNameTool: Tool<ResolveClassNameOutput> {
 
-    const val DEFAULT_LIMIT = 100
+    const val DEFAULT_LIMIT = 100 // 默认返回结果数量上限
 
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("ResolveClassName")
         .description("""Resolve a Java class or interface name to its fully qualified name(s) (FQN).
 
@@ -121,14 +124,27 @@ Behavior:
             .build())
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<ResolveClassNameOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: ResolveClassNameOutput): String {
         if (output.results.isEmpty()) {
             return "No matching classes found."
@@ -150,6 +166,13 @@ Behavior:
         return sb.toString().trim()
     }
 
+    /**
+     * 执行类名解析操作
+     * @param taskState 当前任务状态
+     * @param name 类名（简单名或完全限定名）
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(taskState: TaskState, name: String, toolRequest: ToolExecutionRequest): ToolCallResult<ResolveClassNameOutput> {
         val start = System.currentTimeMillis()
         // 使用 readAction 在读取线程中执行 PSI 操作
@@ -169,6 +192,14 @@ Behavior:
         return ToolCallResult("result", data, resultForAssistant)
     }
 
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,
@@ -181,6 +212,13 @@ Behavior:
         return renderToolSegment(name, taskState, null)
     }
 
+    /**
+     * 构建 ResolveClassName 工具的 UI 展示片段
+     * @param name 搜索的类名
+     * @param taskState 当前任务状态
+     * @param output 工具输出（可为 null 表示搜索未完成）
+     * @return 工具展示片段
+     */
     private fun renderToolSegment(name: String, taskState: TaskState, output: ResolveClassNameOutput?): ToolSegment {
         val content = output?.let {
             buildString {

@@ -28,10 +28,16 @@ import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
 
+/**
+ * 聊天窗口的标签页面板，管理多个会话标签页的创建、选择、关闭和切换。
+ *
+ * @param project 当前项目实例
+ */
 class JarvisToolWindowTabbedPane(
     private val project: Project,
 ) : JPanel(BorderLayout()), Disposable {
 
+    /** 当前活跃的标签页映射，按插入顺序排列 */
     private val activeTabs = LinkedHashMap<String, TabInfo>()
     private val contentLayout = BorderLayout()
     private val contentPanel = JPanel(contentLayout)
@@ -49,6 +55,7 @@ class JarvisToolWindowTabbedPane(
         horizontalScrollBar.unitIncrement = JBUI.scale(24)
     }
 
+    /** 当前选中的标签页 ID */
     private var selectedTabId: String? = null
 
     init {
@@ -61,11 +68,23 @@ class JarvisToolWindowTabbedPane(
         addNewTab()
     }
 
+    /**
+     * 获取当前活跃标签页的面板实例。
+     *
+     * @return 当前活跃的聊天面板，如果没有则返回 null
+     */
     fun activeTabPanel(): JarvisChatTabPanel? {
         val tabId = selectedTabId ?: return null
         return activeTabs[tabId]?.panel
     }
 
+    /**
+     * 添加一个新标签页，可指定初始会话 ID 和标题。
+     *
+     * @param initialConversationId 初始会话 ID，为空则创建新会话
+     * @param title 标签页标题，为空则自动生成
+     * @return 新创建的聊天标签页面板
+     */
     fun addNewTab(initialConversationId: String? = null, title: String = ""): JarvisChatTabPanel {
         val tabId = UUID.randomUUID().toString().replace("-", "")
         val resolvedTitle = title.ifBlank { nextTitle() }
@@ -86,10 +105,19 @@ class JarvisToolWindowTabbedPane(
         return panel
     }
 
+    /**
+     * 刷新所有标签页中的模型列表。
+     */
     fun refreshModels() {
         activeTabs.values.forEach { it.panel.refreshModels() }
     }
 
+    /**
+     * 在新标签页中打开指定会话。
+     *
+     * @param conversationId 会话 ID
+     * @param title 会话标题
+     */
     fun openConversationInNewTab(conversationId: String, title: String) {
         addNewTab(initialConversationId = conversationId, title = title)
     }
@@ -103,6 +131,12 @@ class JarvisToolWindowTabbedPane(
         addNewTab()
     }
 
+    /**
+     * 重命名指定标签页。
+     *
+     * @param tabId 标签页 ID
+     * @param title 新标题
+     */
     fun renameTab(tabId: String, title: String) {
         val info = activeTabs[tabId] ?: return
         info.title = ensureUniqueName(title, tabId)
@@ -322,6 +356,13 @@ class JarvisToolWindowTabbedPane(
         return if (title.length <= maxLength) title else title.take(maxLength - 3) + "..."
     }
 
+    /**
+     * 标签页信息，包含标题、面板实例和标签组件。
+     *
+     * @property title 标签页标题
+     * @property panel 聊天面板实例
+     * @property tabComponent 标签页 UI 组件
+     */
     private data class TabInfo(
         var title: String,
         val panel: JarvisChatTabPanel,

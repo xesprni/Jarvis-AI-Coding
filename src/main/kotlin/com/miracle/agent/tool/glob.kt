@@ -23,11 +23,14 @@ import java.io.File
 import java.nio.file.FileSystems
 import kotlin.reflect.KFunction
 
+/**
+ * Glob 工具的输出结果
+ */
 data class GlobToolOutput(
-    val filenames: List<String>,
-    val numFiles: Int,
-    val truncated: Boolean,
-    val durationMs: Long
+    val filenames: List<String>, // 匹配的文件路径列表
+    val numFiles: Int, // 匹配的文件总数
+    val truncated: Boolean, // 结果是否被截断
+    val durationMs: Long // 执行耗时（毫秒）
 )
 
 /**
@@ -37,7 +40,7 @@ data class GlobToolOutput(
  */
 object GlobTool: Tool<GlobToolOutput> {
 
-    const val DEFAULT_LIMIT = 100
+    const val DEFAULT_LIMIT = 100 // 默认返回结果数量上限
 
     val SPEC = ToolSpecification.builder()
         .name("Glob")
@@ -57,14 +60,30 @@ object GlobTool: Tool<GlobToolOutput> {
             .build())
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return Glob 工具的规格定义
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<GlobToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 处理工具参数流式返回，构建 UI 展示片段
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段
+     */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         if (isPartial) return null
 
@@ -73,6 +92,11 @@ object GlobTool: Tool<GlobToolOutput> {
         return renderToolSegment(pattern, path, taskState, null)
     }
 
+    /**
+     * 将工具输出渲染为返回给 AI 的文本
+     * @param output Glob 搜索结果
+     * @return 格式化后的结果文本
+     */
     override fun renderResultForAssistant(output: GlobToolOutput): String {
         var result = if (output.filenames.isEmpty()) {
             "No files found"
@@ -88,6 +112,14 @@ object GlobTool: Tool<GlobToolOutput> {
         return result
     }
 
+    /**
+     * 构建 Glob 工具的 UI 展示片段
+     * @param pattern glob 模式
+     * @param path 搜索路径
+     * @param taskState 当前任务状态
+     * @param output Glob 工具输出（可为 null 表示搜索未完成）
+     * @return 工具展示片段
+     */
     fun renderToolSegment(pattern: String, path: String?, taskState: TaskState, output: GlobToolOutput?): ToolSegment {
         // 构建搜索信息展示
         val content = output?.let {
@@ -123,6 +155,11 @@ object GlobTool: Tool<GlobToolOutput> {
         return segment
     }
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         (input as JsonObject).let {
             val pattern = it["pattern"]?.jsonPrimitive?.contentOrNull
@@ -146,6 +183,14 @@ object GlobTool: Tool<GlobToolOutput> {
         }
     }
 
+    /**
+     * 执行文件模式匹配搜索
+     * @param pattern glob 匹配模式
+     * @param path 搜索目录路径
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(pattern: String, path: String? = null, taskState: TaskState, toolRequest: ToolExecutionRequest): ToolCallResult<GlobToolOutput> {
         val start = System.currentTimeMillis()
         val cwd = toPosixPath(getCurrentProjectRootPath())
@@ -176,6 +221,9 @@ object GlobTool: Tool<GlobToolOutput> {
         )
     }
 
+    /**
+     * Glob 搜索的内部结果
+     */
     private data class GlobResult(
         val files: List<String> = emptyList(),
         val truncated: Boolean = false

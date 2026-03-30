@@ -108,6 +108,13 @@ internal object ChatTheme {
         java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm")
             .withZone(java.time.ZoneId.systemDefault())
 
+    /**
+     * 尝试加载指定路径的图标，加载失败时返回备用图标。
+     *
+     * @param path 图标资源路径
+     * @param fallback 备用图标
+     * @return 加载成功返回目标图标，否则返回备用图标
+     */
     fun iconOrFallback(path: String, fallback: Icon): Icon {
         return runCatching { IconLoader.getIcon(path, JarvisChatTabPanel::class.java) }.getOrDefault(fallback)
     }

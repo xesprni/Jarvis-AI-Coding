@@ -72,7 +72,12 @@ object CommitMessageGenerator {
     }
     
     /**
-     * 构建 AI 提示词
+     * 构建 AI 生成 Commit Message 的提示词
+     *
+     * @param gitDiff Git 变更差异内容
+     * @param commitType 提交类型，如 "feat"、"fix" 等
+     * @param issueKey Jira 任务编号
+     * @return 构建好的提示词文本
      */
     private fun buildPrompt(
         gitDiff: String,

@@ -17,14 +17,17 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import kotlin.reflect.KFunction
 
+/**
+ * Edit 工具的输出结果
+ */
 data class EditToolOutput(
-    val filePath: String,
-    val oldString: String,
-    val newString: String,
-    val originalContent: String,
-    val newContent: String,
-    val structuredPatch: List<Hunk>,
-    val operation: String // "create", "update", "delete"
+    val filePath: String, // 文件路径
+    val oldString: String, // 被替换的原始文本
+    val newString: String, // 替换后的新文本
+    val originalContent: String, // 文件原始完整内容
+    val newContent: String, // 文件替换后的完整内容
+    val structuredPatch: List<Hunk>, // 结构化 diff 补丁
+    val operation: String // 操作类型："create", "update", "delete", "user_edit"
 )
 
 /**
@@ -32,8 +35,8 @@ data class EditToolOutput(
  */
 object EditTool: Tool<EditToolOutput> {
 
-    const val N_LINES_SNIPPET = 4
-    const val MAX_LINES_TO_RENDER_FOR_ASSISTANT = 20
+    const val N_LINES_SNIPPET = 4 // 代码片段上下文行数
+    const val MAX_LINES_TO_RENDER_FOR_ASSISTANT = 20 // 返回给 AI 的最大渲染行数
     const val TRUNCATED_MESSAGE = "\n...[truncated]"
     private val LOG = Logger.getInstance(EditTool::class.java)
 
@@ -59,14 +62,27 @@ Usage:
             .build())
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return Edit 工具的规格定义
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<EditToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出渲染为返回给 AI 的文本
+     * @param output Edit 工具输出结果
+     * @return 格式化后的结果文本
+     */
     override fun renderResultForAssistant(output: EditToolOutput): String {
         val (snippet, startLine) = if (output.operation == "user_edit") {
             getUserEditSnippet(output.newContent)
@@ -83,6 +99,16 @@ Usage:
         return "$prefix Here's the result of running `cat -n` on a snippet of the edited file:\n${addLineNumbers(snippet, startLine)}"
     }
 
+    /**
+     * 执行文件编辑操作
+     * @param file_path 文件绝对路径
+     * @param old_string 被替换的原始文本
+     * @param new_string 替换后的新文本
+     * @param replace_all 是否替换所有匹配项
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(file_path: String, old_string: String, new_string: String, replace_all: Boolean? = false,
                         taskState: TaskState, toolRequest: ToolExecutionRequest): ToolCallResult<EditToolOutput> {
         val safeReplaceAll = replace_all ?: false
@@ -128,6 +154,14 @@ Usage:
             resultForAssistant = renderResultForAssistant(data)
         )
     }
+    /**
+     * 处理工具参数流式返回，构建 UI 展示片段，并在需要时显示 diff 窗口
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段
+     */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
         if (isPartial) return null
 
@@ -176,6 +210,15 @@ Usage:
         )
     }
 
+    /**
+     * 处理用户在 diff 窗口中修改后的内容
+     * @param filePath 文件路径
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @param oldString 原始替换文本
+     * @param newString 新替换文本
+     * @return 工具调用结果
+     */
     private fun handleUserModifiedContent(
         filePath: String,
         taskState: TaskState,
@@ -216,6 +259,11 @@ Usage:
         )
     }
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         input as JsonObject
         // 参数存在性校验
@@ -256,6 +304,13 @@ Usage:
     }
 
 
+    /**
+     * 获取编辑位置的代码片段及起始行号
+     * @param initialText 文件完整内容
+     * @param oldStr 被替换的文本
+     * @param newStr 替换后的文本
+     * @return 代码片段和起始行号的 Pair
+     */
     private fun getSnippet(initialText: String, oldStr: String, newStr: String): Pair<String, Int> {
         val before = if (oldStr.isEmpty()) "" else replaceContentLineEnding( initialText, LineEndingType.LF).split(oldStr)[0]
         val replacementLine = before.split(Regex("\\r?\\n")).size - 1

@@ -17,6 +17,12 @@ import java.awt.Dimension
 import javax.swing.JComponent
 import javax.swing.JPanel
 
+/**
+ * Jarvis 设置对话框，以标签页形式展示所有设置分区。
+ *
+ * @param project 当前项目实例
+ * @param initialTab 初始显示的设置标签页，默认为模型页
+ */
 class JarvisSettingsDialog(
     private val project: Project,
     initialTab: SettingsTab = SettingsTab.MODELS,
@@ -73,6 +79,7 @@ class JarvisSettingsDialog(
         }
     }
 
+    /** 设置标签页枚举，定义各分区的标题 */
     enum class SettingsTab(val title: String) {
         MODELS("模型"),
         MCP("MCP"),

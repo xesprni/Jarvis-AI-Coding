@@ -31,6 +31,9 @@ import java.nio.file.Paths
 import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * MCP 单个服务器的配置信息
+ */
 @Serializable
 data class McpServerConfig(
     val type: String = "stdio",
@@ -47,11 +50,17 @@ data class McpServerConfig(
     val note: String? = null,
 )
 
+/**
+ * MCP 配置，包含所有服务器的配置映射
+ */
 @Serializable
 data class McpConfig(
     val servers: Map<String, McpServerConfig> = emptyMap(),
 )
 
+/**
+ * MCP 服务器安装范围枚举，区分项目级和全局级配置
+ */
 enum class McpInstallScope(val displayName: String, val spaceName: String) {
     PROJECT("项目(Project)", "Project"),
     GLOBAL("全局(Global)", "Global");
@@ -59,23 +68,39 @@ enum class McpInstallScope(val displayName: String, val spaceName: String) {
     override fun toString(): String = displayName
 }
 
+/**
+ * MCP 配置管理器，负责配置文件的读取、写入、合并和缓存管理。
+ * 支持用户级（全局）和项目级两级配置，项目级配置优先于全局配置。
+ */
 object McpConfigManager {
+    /** 配置缓存条目 */
     private data class ConfigCacheEntry(val config: McpConfig)
 
+    /** 配置缓存，key 为项目路径 */
     private val cachedConfigs = ConcurrentHashMap<String, ConfigCacheEntry>()
+    /** JSON 序列化配置 */
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
         encodeDefaults = false
     }
 
+    /** 默认配置文件模板 */
     private const val DEFAULT_CONFIG_TEMPLATE = "{\n  \"mcpServers\": {}\n}\n"
+    /** 旧版 useJarvisAuth 认证方式移除后的提示信息 */
     private const val LEGACY_AUTH_NOTE =
         "Legacy useJarvisAuth was removed. Add explicit token or headers to re-enable."
 
+    /** 配置文件名 */
     const val CONFIG_FILE_NAME = "mcp_settings.json"
     val LOG: Logger = Logger.getInstance(McpConfigManager::class.java)
 
+    /**
+     * 从磁盘加载并合并用户级和项目级配置，同时更新缓存
+     *
+     * @param project IntelliJ 项目实例，为 null 时仅加载全局配置
+     * @return 合并后的 MCP 配置
+     */
     fun loadConfig(project: Project? = null): McpConfig {
         val key = projectKey(project)
         val userConfigFile = Paths.get(getUserConfigDirectory(), MCP_CONFIG_DIRECTORY, CONFIG_FILE_NAME).toFile()
@@ -103,15 +128,34 @@ object McpConfigManager {
         return finalConfig
     }
 
+    /**
+     * 获取缓存的配置，缓存未命中时从磁盘加载
+     *
+     * @param project IntelliJ 项目实例，为 null 时获取全局配置
+     * @return MCP 配置
+     */
     fun getConfig(project: Project? = null): McpConfig {
         val key = projectKey(project)
         return cachedConfigs[key]?.config ?: loadConfig(project)
     }
 
+    /**
+     * 获取指定服务器的配置信息
+     *
+     * @param project IntelliJ 项目实例
+     * @param serverName 服务器名称
+     * @return 服务器配置，不存在时返回 null
+     */
     fun getServerConfig(project: Project? = null, serverName: String): McpServerConfig? {
         return getConfig(project).servers[serverName]?.let(::normalizeConfig)
     }
 
+    /**
+     * 获取所有已启用的服务器配置列表
+     *
+     * @param project IntelliJ 项目实例，为 null 时获取全局配置
+     * @return 服务器名称与配置的配对列表
+     */
     fun getEnabledServers(project: Project? = null): List<Pair<String, McpServerConfig>> {
         return getConfig(project).servers.mapNotNull { (name, config) ->
             val normalized = normalizeConfig(config)
@@ -119,15 +163,33 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 使指定项目的配置缓存失效，强制下次读取时重新加载
+     *
+     * @param project IntelliJ 项目实例，为 null 时清除全局配置缓存
+     */
     fun invalidate(project: Project? = null) {
         cachedConfigs.remove(projectKey(project))
     }
 
+    /**
+     * 从指定配置文件中读取服务器配置映射
+     *
+     * @param file 配置文件
+     * @return 服务器名称到配置的映射
+     */
     fun readConfigFileServers(file: File): Map<String, McpServerConfig> {
         val scope = inferScope(file)
         return readConfigFile(file, scope).orEmpty()
     }
 
+    /**
+     * 将服务器配置写入指定的配置文件
+     *
+     * @param file 目标配置文件
+     * @param servers 服务器名称到配置的映射
+     * @throws Exception 写入失败时抛出异常
+     */
     fun writeConfigFile(file: File, servers: Map<String, McpServerConfig>) {
         try {
             file.parentFile?.mkdirs()
@@ -144,6 +206,13 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 从指定配置文件中移除某个服务器配置
+     *
+     * @param file 配置文件
+     * @param serverName 待移除的服务器名称
+     * @return 是否成功移除
+     */
     fun removeServerFromFile(file: File, serverName: String): Boolean {
         if (!file.exists()) {
             return false
@@ -163,6 +232,13 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 在编辑器中打开指定范围的 MCP 配置文件，文件不存在时自动创建
+     *
+     * @param project IntelliJ 项目实例
+     * @param scope 配置范围（项目级或全局级）
+     * @return 错误信息，成功时返回 null
+     */
     fun openConfigFile(project: Project, scope: McpInstallScope): String? {
         return try {
             val configDir = when (scope) {
@@ -182,11 +258,24 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 生成项目缓存 key
+     *
+     * @param project IntelliJ 项目实例
+     * @return 项目路径的标准化字符串
+     */
     private fun projectKey(project: Project?): String {
         val basePath = project?.basePath ?: getCurrentProjectRootPath()
         return Paths.get(basePath).normalize().toString()
     }
 
+    /**
+     * 从配置文件中读取服务器配置
+     *
+     * @param file 配置文件
+     * @param scope 配置范围
+     * @return 服务器配置映射，解析失败时返回 null
+     */
     private fun readConfigFile(file: File, scope: McpInstallScope?): Map<String, McpServerConfig>? {
         if (!file.exists()) {
             return emptyMap()
@@ -201,6 +290,13 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 解析 JSON 对象中的服务器配置节点
+     *
+     * @param objectNode 包含服务器配置的 JSON 对象
+     * @param scope 配置范围
+     * @return 服务器名称到配置的映射
+     */
     private fun parseServers(
         objectNode: JsonObject,
         scope: McpInstallScope?,
@@ -232,6 +328,12 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 根据配置文件路径推断其所属范围（全局或项目级）
+     *
+     * @param file 配置文件
+     * @return 推断出的配置范围
+     */
     private fun inferScope(file: File): McpInstallScope? {
         val normalizedPath = file.absoluteFile.normalize().path
         val globalRoot = Paths.get(getUserConfigDirectory(), MCP_CONFIG_DIRECTORY).toFile().absoluteFile.normalize().path
@@ -242,6 +344,12 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 标准化服务器配置，自动补全传输类型
+     *
+     * @param config 原始服务器配置
+     * @return 标准化后的配置副本
+     */
     private fun normalizeConfig(config: McpServerConfig): McpServerConfig {
         val resolvedType = when {
             config.type.isNotBlank() -> config.type
@@ -254,6 +362,12 @@ object McpConfigManager {
 
     private fun McpServerConfig.isEnabled(): Boolean = disabled != true
 
+    /**
+     * 将内容强制写入文件并同步到磁盘，确保数据持久化
+     *
+     * @param file 目标文件
+     * @param content 待写入的内容
+     */
     private fun forceWriteAndSync(file: File, content: String) {
         FileOutputStream(file, false).channel.use { channel ->
             val bytes = content.toByteArray(StandardCharsets.UTF_8)
@@ -266,6 +380,12 @@ object McpConfigManager {
         }
     }
 
+    /**
+     * 在 IntelliJ 编辑器中打开指定文件
+     *
+     * @param project IntelliJ 项目实例
+     * @param file 待打开的文件
+     */
     private fun openConfigFileInEditor(project: Project?, file: File) {
         if (project == null) {
             return

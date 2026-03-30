@@ -20,7 +20,7 @@ import kotlin.reflect.KFunction
  */
 object EnterPlanModeTool : Tool<EnterPlanModeOutput> {
 
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("EnterPlanMode")
         .description("""Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.
 
@@ -89,10 +89,23 @@ In plan mode, you'll:
         )
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification = SPEC
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<EnterPlanModeOutput>> = ::execute
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: EnterPlanModeOutput): String {
         return if (output.approved) {
             "EnterPlanMode is deprecated. Switch to Plan mode from the UI before sending the request."
@@ -101,6 +114,11 @@ In plan mode, you'll:
         }
     }
 
+    /**
+     * 校验工具输入参数
+     * @param input 工具输入参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         val jsonObject = input as? JsonObject
             ?: throw ToolParameterException("Invalid input format")
@@ -110,6 +128,14 @@ In plan mode, you'll:
         }?.contentOrNull ?: throw MissingToolParameterException(getName(), "reason")
     }
 
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,
@@ -133,6 +159,12 @@ In plan mode, you'll:
         )
     }
 
+    /**
+     * 执行进入计划模式操作（已废弃，现在从 UI 切换）
+     * @param taskState 当前任务状态
+     * @param reason 进入计划模式的原因
+     * @return 工具调用结果
+     */
     fun execute(taskState: TaskState, reason: String): ToolCallResult<EnterPlanModeOutput> {
         val output = EnterPlanModeOutput(
             approved = false,
@@ -148,8 +180,11 @@ In plan mode, you'll:
     }
 }
 
+/**
+ * EnterPlanMode 工具的输出结果
+ */
 data class EnterPlanModeOutput(
-    val approved: Boolean,
-    val reason: String,
-    val planDirectory: String
+    val approved: Boolean, // 用户是否同意进入计划模式
+    val reason: String, // 进入计划模式的原因
+    val planDirectory: String // 计划文件目录
 )

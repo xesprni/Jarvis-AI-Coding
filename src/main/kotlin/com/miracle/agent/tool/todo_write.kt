@@ -17,17 +17,23 @@ import kotlin.math.max
 import kotlin.reflect.KFunction
 
 
+/**
+ * TodoWrite 工具的输出结果
+ */
 data class TodoWriteToolOutput(
-    val summary: String,
-    val todos: List<TodoItem>,
-    val stats: TodoStats
+    val summary: String, // 操作摘要
+    val todos: List<TodoItem>, // 当前列表中的所有待办事项
+    val stats: TodoStats // 待办事项统计信息
 )
 
+/**
+ * 待办事项统计信息
+ */
 data class TodoStats(
-    val total: Int,
-    val pending: Int,
-    val inProgress: Int,
-    val completed: Int
+    val total: Int, // 总数
+    val pending: Int, // 待处理数
+    val inProgress: Int, // 进行中数
+    val completed: Int // 已完成数
 )
 
 private val json = Json {
@@ -42,7 +48,7 @@ private val json = Json {
 object TodoWriteTool : Tool<TodoWriteToolOutput> {
 
     private val LOG = Logger.getInstance(TodoWriteTool::class.java)
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("TodoWrite")
         .description("""Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
@@ -258,14 +264,27 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
         )
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification {
         return SPEC
     }
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<TodoWriteToolOutput>> {
         return ::execute
     }
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: TodoWriteToolOutput): String {
         return output.summary
     }
@@ -311,6 +330,12 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
         )
     }
 
+    /**
+     * 执行待办事项更新操作
+     * @param todos 新的待办事项列表
+     * @param taskState 当前任务状态
+     * @return 工具调用结果
+     */
     fun execute(todos: List<TodoItem>, taskState: TaskState): ToolCallResult<TodoWriteToolOutput> {
         try {
             val previousTodos = TodoStorage.getTodos(taskState.taskId, taskState.agentId, taskState.project)
@@ -353,6 +378,11 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
         }
     }
 
+    /**
+     * 校验工具输入参数
+     * @param input 工具输入参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         val jsonObject = input as JsonObject
         val todosElement = jsonObject["todos"]
@@ -405,6 +435,11 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
         }
     }
 
+    /**
+     * 生成待办事项统计信息
+     * @param todos 待办事项列表
+     * @return 统计信息
+     */
     private fun generateStats(todos: List<TodoItem>): TodoStats {
         return TodoStats(
             total = todos.size,
@@ -414,6 +449,11 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
         )
     }
 
+    /**
+     * 根据统计信息生成摘要文本
+     * @param stats 统计信息
+     * @return 摘要文本
+     */
     private fun generateSummary(stats: TodoStats): String {
         var summary = "Updated ${stats.total} todo(s)"
         if (stats.total > 0) {

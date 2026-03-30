@@ -19,7 +19,7 @@ import kotlin.reflect.KFunction
  */
 object ExitPlanModeTool : Tool<ExitPlanModeOutput> {
 
-    val SPEC = ToolSpecification.builder()
+    val SPEC = ToolSpecification.builder() // 工具规格定义，供模型识别和调用
         .name("ExitPlanMode")
         .description("""Use this tool when you are in plan mode and have finished writing your plan to the plan file and are ready for user approval.
 
@@ -53,10 +53,23 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
         )
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification = SPEC
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<ExitPlanModeOutput>> = ::execute
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: ExitPlanModeOutput): String {
         return if (output.success) {
             "ExitPlanMode is deprecated. Emit a <proposed_plan> block in Plan mode instead."
@@ -65,10 +78,23 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
         }
     }
 
+    /**
+     * 校验工具输入参数
+     * @param input 工具输入参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         input as? JsonObject ?: throw ToolParameterException("Invalid input format")
     }
 
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,
@@ -91,6 +117,12 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
         )
     }
 
+    /**
+     * 执行退出计划模式操作（已废弃，现在使用 proposed_plan 块替代）
+     * @param taskState 当前任务状态
+     * @param planFile 计划文件路径（可选）
+     * @return 工具调用结果
+     */
     fun execute(taskState: TaskState, planFile: String? = null): ToolCallResult<ExitPlanModeOutput> {
         val output = ExitPlanModeOutput(
             success = false,
@@ -107,9 +139,12 @@ Before using this tool, ensure your plan is clear and unambiguous. If there are 
     }
 }
 
+/**
+ * ExitPlanMode 工具的输出结果
+ */
 data class ExitPlanModeOutput(
-    val success: Boolean,
-    val planFilePath: String?,
-    val planContent: String?,
-    val errorMessage: String?
+    val success: Boolean, // 操作是否成功
+    val planFilePath: String?, // 计划文件路径
+    val planContent: String?, // 计划文件内容
+    val errorMessage: String? // 错误信息
 )

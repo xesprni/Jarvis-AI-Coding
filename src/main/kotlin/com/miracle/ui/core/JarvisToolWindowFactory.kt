@@ -8,7 +8,16 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 import javax.swing.Icon
 
+/**
+ * Jarvis 工具窗口工厂，负责创建和注册 Jarvis 工具窗口的内容面板。
+ */
 class JarvisToolWindowFactory : ToolWindowFactory, DumbAware {
+    /**
+     * 创建工具窗口内容，初始化面板并绑定到服务。
+     *
+     * @param project 当前项目实例
+     * @param toolWindow 工具窗口实例
+     */
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         toolWindow.setIcon(TOOL_WINDOW_ICON)
         val panel = JarvisToolWindowPanel(project, toolWindow.disposable)

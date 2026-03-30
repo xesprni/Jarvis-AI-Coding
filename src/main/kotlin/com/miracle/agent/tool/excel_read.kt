@@ -22,17 +22,23 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.reflect.KFunction
 
+/**
+ * Excel 文件中单行数据的数据模型
+ */
 data class ExcelRow(
-    val rowNumber: Int,
-    val values: List<String>,
+    val rowNumber: Int, // 行号（1-based）
+    val values: List<String>, // 单元格值列表
 )
 
+/**
+ * ExcelRead 工具的输出结果
+ */
 data class ExcelReadToolOutput(
-    val filePath: String,
-    val fileName: String?,
-    val sheetIndex: Int,
-    val sheetName: String,
-    val rows: List<ExcelRow>,
+    val filePath: String, // 文件路径
+    val fileName: String?, // 友好文件名
+    val sheetIndex: Int, // 工作表索引（0-based）
+    val sheetName: String, // 工作表名称
+    val rows: List<ExcelRow>, // 行数据列表
 )
 
 /**
@@ -40,9 +46,10 @@ data class ExcelReadToolOutput(
  */
 object ExcelReadTool : Tool<ExcelReadToolOutput> {
 
-    private const val DEFAULT_SHEET_INDEX = 0
-    private const val CONNECT_TIMEOUT_MS = 15_000
-    private const val READ_TIMEOUT_MS = 30_000
+    private const val DEFAULT_SHEET_INDEX = 0 // 默认读取第一个工作表
+    private const val CONNECT_TIMEOUT_MS = 15_000 // HTTP 连接超时时间
+    private const val READ_TIMEOUT_MS = 30_000 // HTTP 读取超时时间
+    // 执行结果缓存，避免 handlePartialBlock 和 execute 重复执行
     private val executeCache: MutableMap<String, ToolCallResult<ExcelReadToolOutput>> = ConcurrentHashMap()
 
     // 工具定义：对外暴露参数 schema，供模型选择调用
@@ -74,10 +81,23 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         )
         .build()
 
+    /**
+     * 获取工具规格定义
+     * @return 工具规格
+     */
     override fun getToolSpecification(): ToolSpecification = SPEC
 
+    /**
+     * 获取工具执行函数的引用
+     * @return 执行函数
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<ExcelReadToolOutput>> = ::execute
 
+    /**
+     * 将工具输出结果渲染为给助手的文本
+     * @param output 工具输出
+     * @return 渲染后的文本
+     */
     override fun renderResultForAssistant(output: ExcelReadToolOutput): String {
         val json = buildJsonObject {
             put("file_path", output.filePath)
@@ -102,6 +122,11 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         return json.toString()
     }
 
+    /**
+     * 校验工具输入参数
+     * @param input 工具输入参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         val jsonObject = input as? JsonObject ?: return
         val filePath = jsonObject["file_path"]?.jsonPrimitive?.contentOrNull
@@ -119,6 +144,14 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         }
     }
 
+    /**
+     * 处理流式参数块，构建 UI 展示片段
+     * @param toolRequestId 工具请求ID
+     * @param partialArgs 部分参数
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数
+     * @return UI 展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,
@@ -149,6 +182,14 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         )
     }
 
+    /**
+     * 执行 Excel 文件读取操作
+     * @param file_path 文件路径或 HTTP(S) URL
+     * @param file_name 友好文件名（可选）
+     * @param sheet_index 工作表索引（0-based）
+     * @param taskState 当前任务状态
+     * @return 工具调用结果
+     */
     fun execute(
         file_path: String,
         file_name: String? = null,
@@ -193,6 +234,13 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         }
     }
 
+    /**
+     * 解析文件名，优先使用显式指定的名称，否则从路径中提取
+     * @param explicitName 显式指定的文件名
+     * @param filePath 文件路径
+     * @param project 当前项目
+     * @return 解析后的文件名
+     */
     private fun resolveFileName(explicitName: String?, filePath: String, project: Project): String? {
         if (!explicitName.isNullOrBlank()) {
             return explicitName
@@ -206,6 +254,11 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         }
     }
 
+    /**
+     * 判断路径是否为远程 HTTP(S) 路径
+     * @param path 文件路径
+     * @return 是否为远程路径
+     */
     private fun isRemotePath(path: String): Boolean {
         return path.startsWith("http://", ignoreCase = true) || path.startsWith("https://", ignoreCase = true)
     }
@@ -234,10 +287,19 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         }
     }
 
+    /**
+     * 工作表数据提取结果
+     */
     private data class SheetExtractionResult(
         val rows: List<ExcelRow>,
     )
 
+    /**
+     * 从工作表中提取所有非隐藏行的数据
+     * @param sheet 工作表对象
+     * @param workbook 工作簿对象
+     * @return 提取结果
+     */
     private fun extractSheet(sheet: Sheet, workbook: Workbook): SheetExtractionResult {
         val formatter = DataFormatter()
         val evaluator = workbook.creationHelper.createFormulaEvaluator()
@@ -281,6 +343,11 @@ object ExcelReadTool : Tool<ExcelReadToolOutput> {
         )
     }
 
+    /**
+     * Excel 文件输入流包装
+     * @param stream 输入流
+     * @param localPath 本地文件路径（远程文件时为 null）
+     */
     private data class ExcelInput(
         val stream: InputStream,
         val localPath: String?

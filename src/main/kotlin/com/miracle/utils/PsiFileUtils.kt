@@ -13,10 +13,16 @@ import com.intellij.psi.PsiManager
 import java.nio.file.Paths
 
 
+/**
+ * PsiFile 文件操作工具类，提供对 IntelliJ PSI 文件系统的读写操作
+ */
 object PsiFileUtils {
 
     /**
      * 根据文件路径获取 PsiFile
+     * @param project 当前项目
+     * @param filePath 文件路径
+     * @return 对应的 PsiFile，找不到时返回 null
      */
     suspend fun findPsiFile(project: Project, filePath: String): PsiFile? {
         val fullPath = normalizeFilePath(filePath, project)
@@ -29,6 +35,12 @@ object PsiFileUtils {
         }
     }
 
+    /**
+     * 根据文件路径获取 VirtualFile
+     * @param project 当前项目
+     * @param filePath 文件路径
+     * @return 对应的 VirtualFile，找不到时返回 null
+     */
     suspend fun findVirtualFile(project: Project, filePath: String): VirtualFile? {
         val fullPath = normalizeFilePath(filePath, project)
         return readAction {
@@ -70,6 +82,10 @@ object PsiFileUtils {
 
     /**
      * 更新 PsiFile 内容
+     * @param psiFile 目标 PsiFile
+     * @param content 新的文件内容
+     * @param flush 是否立即保存到磁盘
+     * @return 更新前的旧内容，失败时返回 null
      */
     suspend fun updatePsiFileContent(psiFile: PsiFile, content: String, flush:Boolean = false): String? {
         return getDocument(psiFile)?.let { document ->
@@ -84,6 +100,14 @@ object PsiFileUtils {
         }
     }
 
+    /**
+     * 创建新的 PsiFile 并写入内容
+     * @param project 当前项目
+     * @param filePath 文件路径
+     * @param content 文件内容，默认为空
+     * @param flush 是否立即保存到磁盘
+     * @return 创建的 PsiFile，失败时返回 null
+     */
     suspend fun createPsiFile(project: Project, filePath: String, content: String = "", flush: Boolean = false): PsiFile? {
         val fullPath = Paths.get(normalizeFilePath(filePath, project))
         val parentPath = fullPath.parent?.toString() ?: return null
@@ -109,12 +133,22 @@ object PsiFileUtils {
         return psiFile
     }
 
+    /**
+     * 将 Document 内容刷新保存到磁盘文件
+     * @param document 需要保存的 Document
+     */
     suspend fun flushDocumentToFile(document: Document) {
         writeAction {
             FileDocumentManager.getInstance().saveDocument(document)
         }
     }
 
+    /**
+     * 预处理文件路径，处理 URI 格式和普通路径
+     * @param filePath 原始文件路径
+     * @param project 当前项目
+     * @return 标准化后的文件路径
+     */
     private fun preparePath(filePath: String, project: Project): String {
         return if (filePath.contains("://")) {
             toPosixPath(filePath)
@@ -123,6 +157,11 @@ object PsiFileUtils {
         }
     }
 
+    /**
+     * 内部方法：通过多种方式查找 VirtualFile，支持本地文件系统、JAR 文件等
+     * @param filePath 文件路径
+     * @return 找到的 VirtualFile，找不到时返回 null
+     */
     private fun findVirtualFileInternal(filePath: String): VirtualFile? {
         val normalizedPath = toPosixPath(filePath)
         val virtualFileManager = VirtualFileManager.getInstance()

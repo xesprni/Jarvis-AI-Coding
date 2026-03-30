@@ -12,6 +12,11 @@ import javax.swing.JPanel
 import javax.swing.JToggleButton
 import javax.swing.SwingConstants
 
+/**
+ * 可折叠的关联文件列表组件，显示文件链接并支持展开/折叠。
+ *
+ * @param links 文件链接列表
+ */
 internal class SelectedFilesAccordion(
     links: List<ActionLink>,
 ) : JPanel(BorderLayout()) {

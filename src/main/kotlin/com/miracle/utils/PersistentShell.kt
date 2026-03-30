@@ -21,29 +21,49 @@ import kotlin.random.Random
 private val LOG = Logger.getInstance(PersistentShell::class.java)
 
 // --- 数据类与常量 ---
+/**
+ * 命令执行结果
+ */
 data class ExecResult(
+    /** 标准输出 */
     val stdout: String,
+    /** 标准错误输出 */
     val stderr: String,
+    /** 退出码 */
     val code: Int,
+    /** 是否被中断 */
     val interrupted: Boolean
 )
 
+/** 输出监听器类型别名 */
 typealias OutputListener = (stdout: String, stderr: String) -> Unit
 
-// DetectedShell 用于封装检测到的 shell 信息
+/**
+ * 检测到的 Shell 信息
+ */
 data class DetectedShell(
+    /** Shell 可执行文件路径 */
     val bin: String,
+    /** Shell 启动参数 */
     val args: List<String>,
+    /** Shell 类型 */
     val type: ShellType
 )
 
+/**
+ * Shell 类型枚举
+ */
 enum class ShellType { POSIX, MSYS, WSL }
 
 // 常量
+/** 临时文件前缀路径 */
 private val TEMPFILE_PREFIX = Paths.get(System.getProperty("java.io.tmpdir"), "jarvis-")
+/** 默认命令执行超时时间（毫秒） */
 private const val DEFAULT_TIMEOUT_MS = 2 * 60 * 1000L
-private const val SIGTERM_CODE = 143 // SIGTERM 的标准退出码
+/** SIGTERM 退出码 */
+private const val SIGTERM_CODE = 143
 
+/** 临时文件后缀常量 */
 private object FileSuffixes {
     const val STATUS = "-status"
     const val STDOUT = "-stdout"
@@ -57,6 +77,13 @@ private fun quoteForBash(str: String): String {
     return "'${str.replace("'", "'\\''")}'"
 }
 
+/**
+ * 将路径转换为 Bash 兼容的路径格式
+ * @param pathStr 原始路径字符串
+ * @param type Shell 类型
+ * @param useClassicDrive 是否使用经典驱动器格式（如 "D:/"），仅 MSYS 有效
+ * @return Bash 兼容的路径字符串
+ */
 fun toBashPath(pathStr: String, type: ShellType, useClassicDrive: Boolean = true): String {
     // 已经是 POSIX 绝对路径
     if (pathStr.startsWith('/')) return pathStr
@@ -147,6 +174,11 @@ private fun detectPythonVenv(cwd: String, type: ShellType): String? {
     return null
 }
 
+/**
+ * 检测系统可用的 Shell 环境
+ * @return 检测到的 Shell 信息
+ * @throws IllegalStateException 当找不到可用的 bash 时抛出
+ */
 fun detectShell(): DetectedShell {
     val isWin = System.getProperty("os.name").lowercase().contains("win")
     if (!isWin) {
@@ -220,7 +252,10 @@ fun detectShell(): DetectedShell {
     throw IllegalStateException(hint)
 }
 
-// --- PersistenceShell类 ---
+/**
+ * 持久化 Shell 会话，维护一个长期存活的 Shell 进程以支持命令执行
+ * @param initialCwd 初始工作目录
+ */
 class PersistentShell(initialCwd: String) {
     // 使用 CoroutineScope 管理所有协程的生命周期
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -247,7 +282,9 @@ class PersistentShell(initialCwd: String) {
     private val cwdFileBashPath: String
 
     private val binShell: String
+    /** Shell 类型 */
     val shellType: ShellType
+    /** 当前工作目录 */
     var cwd: String = initialCwd
 
     init {
@@ -297,6 +334,9 @@ class PersistentShell(initialCwd: String) {
         activatePythonVenv(cwd)
     }
 
+    /**
+     * 重新初始化 Shell 进程
+     */
     fun reInit() {
         this.shellProcess = processBuilder.start()
         this.isAlive = shellProcess.isAlive
@@ -407,6 +447,13 @@ class PersistentShell(initialCwd: String) {
         scope.coroutineContext.cancelChildren()
     }
 
+    /**
+     * 执行命令并等待结果
+     * @param command 要执行的 Shell 命令
+     * @param timeout 超时时间（毫秒），默认 2 分钟
+     * @param outputListener 输出监听回调，可实时获取输出
+     * @return 命令执行结果
+     */
     suspend fun exec(
         command: String, 
         timeout: Long = DEFAULT_TIMEOUT_MS,
@@ -511,6 +558,10 @@ class PersistentShell(initialCwd: String) {
         }
     }
 
+    /**
+     * 获取当前工作目录
+     * @return 当前工作目录路径
+     */
     fun pwd(): String {
         try {
             val newCwd = cwdFile.readText().trim()
@@ -523,6 +574,11 @@ class PersistentShell(initialCwd: String) {
         return this.cwd
     }
 
+    /**
+     * 设置新的工作目录
+     * @param newCwd 新的工作目录路径
+     * @throws IllegalArgumentException 当路径不存在时抛出
+     */
     suspend fun setCwd(newCwd: String) {
         val resolved = Paths.get(newCwd).toAbsolutePath().toString()
         if (!File(resolved).exists()) {
@@ -532,6 +588,9 @@ class PersistentShell(initialCwd: String) {
         exec("cd ${quoteForBash(bashPath)}")
     }
 
+    /**
+     * 关闭 Shell 会话并清理资源
+     */
     suspend fun close() {
         killChildProcesses()
     }

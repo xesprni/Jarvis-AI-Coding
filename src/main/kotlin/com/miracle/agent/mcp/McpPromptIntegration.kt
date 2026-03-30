@@ -22,6 +22,9 @@ object McpPromptIntegration {
 
     /**
      * 生成完整的MCP服务器prompt描述
+     *
+     * @param project IntelliJ 项目实例
+     * @return MCP 服务器指令文本，无已启用服务器时返回空字符串
      */
     fun generateMcpPromptSection(project: Project): String {
         // 获取项目的MCP客户端管理器

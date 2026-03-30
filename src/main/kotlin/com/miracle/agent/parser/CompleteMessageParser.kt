@@ -3,6 +3,10 @@ package com.miracle.agent.parser
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
+/**
+ * 完整消息解析器，用于一次性解析完整的模型输出文本，
+ * 识别其中的代码块、搜索替换模式和普通文本内容
+ */
 class CompleteMessageParser : MessageParser {
 
     companion object {
@@ -31,6 +35,12 @@ class CompleteMessageParser : MessageParser {
         return parseContentIntoSegments(normalizedInput)
     }
 
+    /**
+     * 将文本内容解析为 Segment 列表，按代码块和普通文本进行拆分
+     *
+     * @param content 待解析的文本内容
+     * @return 解析后的 Segment 列表
+     */
     private fun parseContentIntoSegments(content: String): List<Segment> = buildList {
         val codeBlockMatcher = CODE_BLOCK_PATTERN.matcher(content)
         var lastProcessedIndex = 0
@@ -44,6 +54,13 @@ class CompleteMessageParser : MessageParser {
         addTextSegmentIfExists(content, lastProcessedIndex, content.length)
     }
 
+    /**
+     * 如果指定范围内存在文本内容，将其添加为 TextSegment
+     *
+     * @param content 源文本内容
+     * @param startIndex 起始位置
+     * @param endIndex 结束位置
+     */
     private fun MutableList<Segment>.addTextSegmentIfExists(content: String, startIndex: Int, endIndex: Int) {
         if (endIndex > startIndex) {
             val textContent = content.substring(startIndex, endIndex)

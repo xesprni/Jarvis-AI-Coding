@@ -58,6 +58,12 @@ fun shouldAutoApproveTool(toolName: String, filePath: String?, project: Project)
     return false
 }
 
+/**
+ * 判断路径是否位于项目目录内
+ * @param filePath 文件路径
+ * @param project 当前项目
+ * @return 是否在项目目录内
+ */
 private fun isPathInsideProject(filePath: String, project: Project): Boolean {
     if (filePath.startsWith("remote://")) return false
     if (filePath.endsWith(".class")) return true

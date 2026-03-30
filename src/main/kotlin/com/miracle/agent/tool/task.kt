@@ -20,12 +20,23 @@ import java.util.*
 import kotlin.reflect.KFunction
 
 
+/**
+ * 子任务工具，用于将复杂任务委托给专门的子 Agent 执行
+ */
 object TaskTool: Tool<String> {
 
+    /**
+     * 获取工具名称
+     * @return 工具名称 "Task"
+     */
     override fun getName(): String {
         return "Task"
     }
 
+    /**
+     * 获取工具规格定义，动态获取任务描述以支持项目级别的子 Agent
+     * @return Task 工具的规格定义
+     */
     override fun getToolSpecification(): ToolSpecification {
         // 因为有项目级别的 subAgent，这里的描述需要每次动态获取
         return ToolSpecification.builder()
@@ -40,10 +51,23 @@ object TaskTool: Tool<String> {
             .build()
     }
 
+    /**
+     * 获取工具的执行函数引用
+     * @return execute 方法的函数引用
+     */
     override fun getExecuteFunc(): KFunction<ToolCallResult<String>> {
         return ::execute
     }
 
+    /**
+     * 执行子任务，启动指定类型的子 Agent 进行工作
+     * @param description 任务简短描述
+     * @param prompt 传递给子 Agent 的任务提示
+     * @param subagent_type 子 Agent 类型
+     * @param taskState 当前任务状态
+     * @param toolRequest 工具调用请求
+     * @return 工具调用结果
+     */
     suspend fun execute(description: String, prompt: String, subagent_type: String, taskState: TaskState, toolRequest: ToolExecutionRequest): ToolCallResult<String> {
         val agentLoader = taskState.project.service<AgentService>().agentLoader
         val agentConfig = agentLoader.getActiveAgents().firstOrNull { it.agentType == subagent_type } ?: run {
@@ -111,10 +135,20 @@ object TaskTool: Tool<String> {
         }
     }
 
+    /**
+     * 将工具输出渲染为返回给 AI 的文本
+     * @param output 子任务的执行结果
+     * @return 原始结果文本
+     */
     override fun renderResultForAssistant(output: String): String {
         return output
     }
 
+    /**
+     * 校验工具输入参数的合法性
+     * @param input 输入的 JSON 参数
+     * @param taskState 当前任务状态
+     */
     override suspend fun validateInput(input: JsonElement, taskState: TaskState) {
         (input as JsonObject).let {
             it["description"]?.jsonPrimitive?.contentOrNull
@@ -126,6 +160,14 @@ object TaskTool: Tool<String> {
         }
     }
 
+    /**
+     * 处理工具参数流式返回，构建子任务启动的 UI 展示片段
+     * @param toolRequestId 工具请求 ID
+     * @param partialArgs 已解析的参数字段
+     * @param taskState 当前任务状态
+     * @param isPartial 是否为部分参数（流式传输中）
+     * @return 工具展示片段
+     */
     override suspend fun handlePartialBlock(
         toolRequestId: String,
         partialArgs: Map<String, JsonField>,

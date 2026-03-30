@@ -27,7 +27,9 @@ import javax.swing.JTextField
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+/** 用户对 Ask 请求的决策：批准或拒绝 */
 internal enum class AskDecision { APPROVE, REJECT }
+/** Ask 面板的交互模式：审批、问答或结构化输入 */
 private enum class AskPanelMode { APPROVAL, QUESTION, REQUEST }
 
 /**
@@ -40,8 +42,11 @@ internal class AskPanel(
     private val onReply: (AskDecision, String) -> Unit,
 ) : JPanel(BorderLayout()) {
 
+    /** JSON 序列化实例 */
     private val json = Json { ignoreUnknownKeys = true }
+    /** 用户输入文本框 */
     val inputField = JBTextField()
+    /** 当前选择的决策 */
     var selectedDecision = AskDecision.APPROVE
         private set
     private var requestQuestions: List<RequestUserInputQuestion> = emptyList()
@@ -128,6 +133,11 @@ internal class AskPanel(
         }, BorderLayout.SOUTH)
     }
 
+    /**
+     * 绑定 Ask 请求到面板，根据 Ask 类型配置为审批、问答或结构化输入模式。
+     *
+     * @param ask 要绑定的 Ask 请求
+     */
     fun bind(ask: JarvisAsk) {
         isVisible = true
         selectedDecision = AskDecision.APPROVE
@@ -198,6 +208,9 @@ internal class AskPanel(
         repaint()
     }
 
+    /**
+     * 清空面板状态并隐藏。
+     */
     fun clear() {
         isVisible = false
         badgeLabel.text = ""
@@ -213,8 +226,19 @@ internal class AskPanel(
         repaint()
     }
 
+    /**
+     * 返回面板顶部间距，仅在面板可见时返回间距值。
+     *
+     * @return 间距像素值
+     */
     fun spacingTop(): Int = if (isVisible) JBUI.scale(8) else 0
 
+    /**
+     * 验证当前回复是否满足 Ask 请求的要求。
+     *
+     * @param ask 要验证的 Ask 请求
+     * @return 错误信息，验证通过时返回 null
+     */
     fun validateReply(ask: JarvisAsk): String? {
         return when {
             isRequestUserInput(ask) -> {
@@ -229,6 +253,12 @@ internal class AskPanel(
         }
     }
 
+    /**
+     * 根据 Ask 请求类型构建回复载荷。
+     *
+     * @param ask 当前 Ask 请求
+     * @return 序列化后的回复字符串
+     */
     fun buildReplyPayload(ask: JarvisAsk): String {
         return if (isRequestUserInput(ask)) {
             val answers = requestQuestions.associate { question ->
@@ -240,10 +270,21 @@ internal class AskPanel(
         }
     }
 
+    /**
+     * 设置回复文本框的值。
+     *
+     * @param value 要设置的文本
+     */
     internal fun setReplyText(value: String) {
         UiUtil.setTextSafely(inputField, value, moveCaretToEnd = true)
     }
 
+    /**
+     * 设置结构化回答中指定问题 ID 的值。
+     *
+     * @param questionId 问题 ID
+     * @param value 要设置的回答文本
+     */
     internal fun setStructuredAnswer(questionId: String, value: String) {
         requestAnswerFields[questionId]?.let { UiUtil.setTextSafely(it, value, moveCaretToEnd = true) }
     }
@@ -356,11 +397,17 @@ internal class AskPanel(
 /**
  * Checks whether the given [JarvisAsk] is an ask-user-question prompt.
  */
+/**
+ * 判断给定的 Ask 是否为用户问答类型。
+ */
 internal fun isAskUserQuestion(ask: JarvisAsk): Boolean {
     val segment = ask.data.singleOrNull() as? ToolSegment ?: return false
     return segment.name == UiToolName.ASK_USER_QUESTION
 }
 
+/**
+ * 判断给定的 Ask 是否为结构化用户输入请求类型。
+ */
 internal fun isRequestUserInput(ask: JarvisAsk): Boolean {
     val segment = ask.data.singleOrNull() as? ToolSegment ?: return false
     return segment.name == UiToolName.REQUEST_USER_INPUT

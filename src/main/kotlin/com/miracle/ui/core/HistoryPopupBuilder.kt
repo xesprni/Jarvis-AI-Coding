@@ -35,9 +35,11 @@ internal class HistoryPopupBuilder(
     private val project: Project,
 ) {
     /**
-     * @param anchor                component to anchor the popup under
-     * @param currentConversationId ID of the active conversation (excluded from list)
-     * @param onOpenConversation    callback when the user selects a conversation
+     * 显示历史会话弹窗。
+     *
+     * @param anchor 弹窗锚点组件
+     * @param currentConversationId 当前会话 ID（从列表中排除）
+     * @param onOpenConversation 选中会话时的回调
      */
     fun show(
         anchor: Component,
