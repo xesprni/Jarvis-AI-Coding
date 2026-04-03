@@ -70,34 +70,36 @@ class McpClient(
      *
      * @param serverConfig MCP 服务器配置信息
      */
-    private suspend fun connectMcpStdio(serverConfig: McpServerConfig) = withContext(Dispatchers.IO) {
-        require(serverConfig.command.isNotEmpty()) { "Command cannot be null or empty" }
-        val fullCommand = buildCommand(serverConfig)
-        //兼容可能出现的 path 路径问题（Cannot run program "npx":error=2 ,No such file or directory）
-        val resolvedCommand = resolveExecutable(fullCommand.first())
-        val startupTimeout = calculateTimeoutMs(serverConfig.timeout)
-        val process = ProcessBuilder(listOf(resolvedCommand) + fullCommand.drop(1)).apply {
-            val env = environment()
-            // 设置环境变量
-            serverConfig.env.forEach { (key, value) ->
-                env[key] = value
+    private suspend fun connectMcpStdio(serverConfig: McpServerConfig) {
+        withContext(Dispatchers.IO) {
+            require(serverConfig.command.isNotEmpty()) { "Command cannot be null or empty" }
+            val fullCommand = buildCommand(serverConfig)
+            //兼容可能出现的 path 路径问题（Cannot run program "npx":error=2 ,No such file or directory）
+            val resolvedCommand = resolveExecutable(fullCommand.first())
+            val startupTimeout = calculateTimeoutMs(serverConfig.timeout)
+            val startedProcess = ProcessBuilder(listOf(resolvedCommand) + fullCommand.drop(1)).apply {
+                val env = environment()
+                // 设置环境变量
+                serverConfig.env.forEach { (key, value) ->
+                    env[key] = value
+                }
+                ensureCommandDirectoryInPath(env, resolvedCommand)
+            }.start()
+            process = startedProcess
+            val transport = StdioClientTransport(
+                input = startedProcess.inputStream.asSource().buffered(),
+                output = startedProcess.outputStream.asSink().buffered(),
+            )
+            // Connect the MCP client to the server using the transport
+            try {
+                withTimeout(startupTimeout.milliseconds) {
+                    mcp.connect(transport)
+                }
+            } catch (t: Throwable) {
+                process = null
+                startedProcess.destroyForcibly()
+                throw t
             }
-            ensureCommandDirectoryInPath(env, resolvedCommand)
-        }.start()
-        this.process = process
-        val transport = StdioClientTransport(
-            input = process.inputStream.asSource().buffered(),
-            output = process.outputStream.asSink().buffered(),
-        )
-        // Connect the MCP client to the server using the transport
-        try {
-            withTimeout(startupTimeout.milliseconds) {
-                mcp.connect(transport)
-            }
-        } catch (t: Throwable) {
-            this.process = null
-            process.destroyForcibly()
-            throw t
         }
     }
 
