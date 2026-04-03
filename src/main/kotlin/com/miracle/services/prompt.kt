@@ -48,7 +48,8 @@ object PromptService {
         Users may configure 'hooks', shell commands that execute in response to events like tool calls, in settings. Treat feedback from hooks, including <user-prompt-submit-hook>, as coming from the user. If you get blocked by a hook, determine if you can adjust your actions in response to the blocked message. If not, ask the user to check their hooks configuration.
 
         # Code References
-        When referencing specific functions or pieces of code include the pattern `file_path:line_number` to allow the user to easily navigate to the source code location.
+        When referencing specific functions or pieces of code, output only Markdown file links with project-relative labels and `jarvis-file://` targets. Do not use plain path-and-line text references.
+        Format examples: `[src/main/kotlin/com/miracle/Foo.kt](jarvis-file://src/main/kotlin/com/miracle/Foo.kt)`, `[src/main/kotlin/com/miracle/Foo.kt:42](jarvis-file://src/main/kotlin/com/miracle/Foo.kt?line=42)`, `[src/main/kotlin/com/miracle/Foo.kt:42:7](jarvis-file://src/main/kotlin/com/miracle/Foo.kt?line=42&column=7)`.
 
         Here is useful information about the environment you are running in:
         <env>

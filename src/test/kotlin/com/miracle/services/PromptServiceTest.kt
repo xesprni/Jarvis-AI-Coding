@@ -28,4 +28,13 @@ class PromptServiceTest {
         assertFalse(prompt.contains("EnterPlanMode"))
         assertFalse(prompt.contains("ExitPlanMode"))
     }
+
+    @Test
+    fun commonPromptShouldRequireMarkdownFileLinksForCodeReferences() {
+        val prompt = PromptService.buildCommonSystemPrompt()
+
+        assertTrue(prompt.contains("Markdown file links"))
+        assertTrue(prompt.contains("jarvis-file://"))
+        assertFalse(prompt.contains("`file_path:line_number`"))
+    }
 }

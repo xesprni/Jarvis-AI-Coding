@@ -67,7 +67,7 @@ internal class AssistantMessageCard(
                 )
             )
         } else if (type == AgentMessageType.REASONING) {
-            val tp = thoughtPanel ?: ThoughtProcessPanel().also { thoughtPanel = it }
+            val tp = thoughtPanel ?: ThoughtProcessPanel(renderer).also { thoughtPanel = it }
             val text = normalizedSegments.joinToString("\n") { it.content }
             tp.updateText(text)
             if (!partial) tp.setFinished()
@@ -100,10 +100,12 @@ internal class AssistantMessageCard(
 /**
  * Collapsible panel showing the AI's "thinking" process.
  */
-internal class ThoughtProcessPanel : JPanel(BorderLayout()) {
+internal class ThoughtProcessPanel(
+    renderer: SegmentRendererFactory,
+) : JPanel(BorderLayout()) {
         /** 思维过程文本是否已完成 */
     private var finished: Boolean = false
-    private val contentPane = JarvisMarkdownRenderUtil.createHtmlPane("", false).apply {
+    private val contentPane = renderer.createHtmlPane("", false).apply {
         foreground = MUTED_FOREGROUND
         border = JBUI.Borders.empty(4, 8)
     }

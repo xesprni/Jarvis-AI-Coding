@@ -106,7 +106,7 @@ internal class ToolViewerFactory(
               </body>
             </html>
         """.trimIndent()
-        val textPane = JarvisMarkdownRenderUtil.createHtmlPane(htmlText, false).apply {
+        val textPane = renderer.createHtmlPane(htmlText, false).apply {
             border = JBUI.Borders.empty(2, 0)
         }
         return JPanel(BorderLayout()).apply {

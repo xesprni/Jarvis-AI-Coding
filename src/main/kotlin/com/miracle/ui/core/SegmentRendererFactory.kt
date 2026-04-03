@@ -47,6 +47,7 @@ import javax.swing.JPanel
 import javax.swing.JScrollPane
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
+import javax.swing.JTextPane
 
 /**
  * Factory that converts [Segment] model objects into Swing [JComponent]s.
@@ -151,13 +152,17 @@ internal class SegmentRendererFactory(
         }
     }
 
+    fun createHtmlPane(html: String, opaque: Boolean = false): JTextPane {
+        return JarvisMarkdownRenderUtil.createHtmlPane(project, html, opaque)
+    }
+
     fun createMarkdownBlock(markdown: String, error: Boolean = false): JComponent {
         val html = if (error) {
             JarvisMarkdownRenderUtil.convertMarkdownToErrorHtml(markdown)
         } else {
             JarvisMarkdownRenderUtil.convertMarkdownToHtml(markdown)
         }
-        val pane = JarvisMarkdownRenderUtil.createHtmlPane(html, false).apply {
+        val pane = createHtmlPane(html, false).apply {
             border = JBUI.Borders.empty(2, 0)
             alignmentX = Component.LEFT_ALIGNMENT
         }

@@ -1,6 +1,11 @@
 package com.miracle.ui.core
 
 import com.intellij.ide.BrowserUtil
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColorUtil
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.HTMLEditorKitBuilder
@@ -26,6 +31,11 @@ import com.vladsch.flexmark.parser.Parser
 import com.vladsch.flexmark.util.data.DataHolder
 import com.vladsch.flexmark.util.data.MutableDataSet
 import java.awt.Color
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import javax.swing.JTextPane
 import javax.swing.event.HyperlinkEvent
 import javax.swing.text.DefaultCaret
@@ -66,6 +76,10 @@ object JarvisMarkdownRenderUtil {
     }
 
     fun createHtmlPane(html: String, opaque: Boolean = false): JTextPane {
+        return createHtmlPane(project = null, html = html, opaque = opaque)
+    }
+
+    fun createHtmlPane(project: Project?, html: String, opaque: Boolean = false): JTextPane {
         val textPane = JTextPane()
         textPane.putClientProperty(JTextPane.HONOR_DISPLAY_PROPERTIES, true)
         val editorKit = HTMLEditorKitBuilder().withWordWrapViewFactory().build()
@@ -80,13 +94,129 @@ object JarvisMarkdownRenderUtil {
         textPane.text = html
         textPane.isOpaque = opaque
         textPane.addHyperlinkListener { event ->
-            if (event.eventType == HyperlinkEvent.EventType.ACTIVATED && event.url != null) {
-                BrowserUtil.browse(event.url)
+            if (event.eventType != HyperlinkEvent.EventType.ACTIVATED) return@addHyperlinkListener
+
+            val description = event.description.orEmpty()
+            if (ChatFileLinkHandler.isJarvisFileLink(description)) {
+                if (project != null) {
+                    ChatFileLinkHandler.navigate(project, description)
+                }
+                return@addHyperlinkListener
+            }
+
+            when {
+                event.url != null -> BrowserUtil.browse(event.url)
+                description.startsWith("http://", ignoreCase = true) ||
+                    description.startsWith("https://", ignoreCase = true) -> BrowserUtil.browse(description)
             }
         }
         (textPane.caret as? DefaultCaret)?.updatePolicy = DefaultCaret.NEVER_UPDATE
         return textPane
     }
+
+}
+
+internal data class JarvisFileLinkTarget(
+    val relativePath: String,
+    val line: Int? = null,
+    val column: Int? = null,
+)
+
+internal object ChatFileLinkHandler {
+    private const val JARVIS_FILE_SCHEME = "jarvis-file://"
+    private val LOG = Logger.getInstance(ChatFileLinkHandler::class.java)
+
+    fun isJarvisFileLink(rawHref: String?): Boolean {
+        return rawHref?.startsWith(JARVIS_FILE_SCHEME, ignoreCase = true) == true
+    }
+
+    fun parse(rawHref: String?): JarvisFileLinkTarget? {
+        val href = rawHref?.takeIf(::isJarvisFileLink) ?: return null
+        val rawTarget = href.substring(JARVIS_FILE_SCHEME.length).substringBefore("#")
+        val pathAndQuery = rawTarget.split("?", limit = 2)
+        val relativePath = decodeComponent(pathAndQuery[0]).replace('\\', '/')
+        if (relativePath.isBlank()) return null
+        if (relativePath.startsWith("/") || relativePath.startsWith("\\")) return null
+        if (relativePath.contains('\u0000')) return null
+        if (WINDOWS_ABSOLUTE_PATH.matches(relativePath)) return null
+
+        val query = parseQuery(pathAndQuery.getOrElse(1) { "" })
+        val line = parsePositiveInt(query["line"]) ?: if ("line" in query) return null else null
+        val column = parsePositiveInt(query["column"]) ?: if ("column" in query) return null else null
+        if (column != null && line == null) return null
+
+        return JarvisFileLinkTarget(relativePath = relativePath, line = line, column = column)
+    }
+
+    fun resolveProjectFile(projectBasePath: String?, target: JarvisFileLinkTarget): Path? {
+        if (projectBasePath.isNullOrBlank()) return null
+
+        val basePath = runCatching { Paths.get(projectBasePath).normalize().toRealPath() }.getOrNull() ?: return null
+        val candidatePath = runCatching { basePath.resolve(target.relativePath).normalize() }.getOrNull() ?: return null
+        if (!candidatePath.startsWith(basePath)) return null
+
+        val realPath = runCatching { candidatePath.toRealPath() }.getOrNull() ?: return null
+        if (!realPath.startsWith(basePath)) return null
+        if (!Files.isRegularFile(realPath)) return null
+        return realPath
+    }
+
+    fun navigate(project: Project, rawHref: String): Boolean {
+        val target = parse(rawHref)
+        if (target == null) {
+            LOG.warn("Rejected malformed jarvis-file link: $rawHref")
+            return false
+        }
+
+        val resolvedPath = resolveProjectFile(project.basePath, target)
+        if (resolvedPath == null) {
+            LOG.warn("Rejected jarvis-file link outside project or missing file: $rawHref")
+            return false
+        }
+
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(resolvedPath.toString())
+        if (virtualFile == null || !virtualFile.isValid) {
+            LOG.warn("Failed to resolve virtual file for jarvis-file link: $rawHref")
+            return false
+        }
+
+        if (target.line == null) {
+            FileEditorManager.getInstance(project).openFile(virtualFile, true)
+        } else {
+            OpenFileDescriptor(
+                project,
+                virtualFile,
+                target.line - 1,
+                (target.column ?: 1) - 1,
+            ).navigate(true)
+        }
+        return true
+    }
+
+    private fun parseQuery(rawQuery: String): Map<String, String> {
+        if (rawQuery.isBlank()) return emptyMap()
+        return rawQuery.split("&")
+            .asSequence()
+            .filter { it.isNotBlank() }
+            .mapNotNull { entry ->
+                val parts = entry.split("=", limit = 2)
+                val key = decodeComponent(parts[0]).trim()
+                if (key.isBlank()) return@mapNotNull null
+                val value = decodeComponent(parts.getOrElse(1) { "" }).trim()
+                key to value
+            }
+            .toMap()
+    }
+
+    private fun decodeComponent(value: String): String {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8).trim()
+    }
+
+    private fun parsePositiveInt(value: String?): Int? {
+        return value?.toIntOrNull()?.takeIf { it > 0 }
+    }
+
+    private val WINDOWS_ABSOLUTE_PATH = Regex("^[A-Za-z]:[/\\\\].*")
 }
 
 private class JarvisResponseNodeRenderer : NodeRenderer {
