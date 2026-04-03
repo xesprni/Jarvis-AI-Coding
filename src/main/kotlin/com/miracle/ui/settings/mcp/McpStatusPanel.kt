@@ -152,12 +152,20 @@ class McpStatusPanel(
             maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
         }
 
+        val addButton = JButton("+ 新增", AllIcons.General.Add).apply {
+            toolTipText = "新增 MCP 服务器配置"
+            isOpaque = false
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            addActionListener { showAddServerDialog() }
+        }
+
         val topRow = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.X_AXIS)
             isOpaque = false
             alignmentX = Component.LEFT_ALIGNMENT
             add(title)
             add(Box.createHorizontalGlue())
+            add(addButton)
         }
 
         return JPanel().apply {
@@ -166,6 +174,17 @@ class McpStatusPanel(
             border = JBUI.Borders.emptyBottom(8)
             add(topRow)
             add(subtitle)
+        }
+    }
+
+    // ─── Add server dialog ────────────────────────────────────────
+
+    private fun showAddServerDialog() {
+        val dialog = AddMcpServerDialog(project)
+        if (dialog.showAndGet()) {
+            val (serverName, config, scope) = dialog.getServerConfig()
+            viewModel.addServer(serverName, config, scope)
+            refresh(showLoading = false)
         }
     }
 

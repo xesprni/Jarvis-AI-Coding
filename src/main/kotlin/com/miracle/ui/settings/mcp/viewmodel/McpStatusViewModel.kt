@@ -4,13 +4,19 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.miracle.agent.mcp.McpClientHub
+import com.miracle.agent.mcp.McpConfigManager
+import com.miracle.agent.mcp.McpInstallScope
 import com.miracle.agent.mcp.McpServerConfig
+import com.miracle.utils.MCP_CONFIG_DIRECTORY
+import com.miracle.utils.getProjectConfigDirectory
+import com.miracle.utils.getUserConfigDirectory
 import io.modelcontextprotocol.kotlin.sdk.Tool
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.nio.file.Paths
 
 /**
  * MCP 状态面板的 ViewModel，负责数据获取和业务逻辑
@@ -114,6 +120,38 @@ class McpStatusViewModel(private val project: Project) {
     fun uninstallServer(serverName: String) {
         val hub = McpClientHub.getInstance(project)
         hub.uninstallMcpServer(serverName)
+    }
+
+    /**
+     * 添加新的 MCP 服务器配置
+     *
+     * @param serverName 服务器名称
+     * @param config 服务器配置
+     * @param scope 配置范围（项目级或全局级）
+     * @return 是否成功添加
+     */
+    fun addServer(serverName: String, config: McpServerConfig, scope: McpInstallScope): Boolean {
+        val configFile = resolveConfigFile(scope)
+        val added = McpConfigManager.addServerToFile(configFile, serverName, config)
+        if (!added) {
+            return false
+        }
+        McpConfigManager.invalidate(project)
+        // 触发连接
+        val hub = McpClientHub.getInstance(project)
+        hub.addServer(serverName, config, notifyUi = true)
+        return true
+    }
+
+    /**
+     * 根据配置范围解析配置文件路径
+     */
+    private fun resolveConfigFile(scope: McpInstallScope): java.io.File {
+        val configDir = when (scope) {
+            McpInstallScope.PROJECT -> getProjectConfigDirectory(project)
+            McpInstallScope.GLOBAL -> getUserConfigDirectory()
+        }
+        return Paths.get(configDir, MCP_CONFIG_DIRECTORY, McpConfigManager.CONFIG_FILE_NAME).toFile()
     }
 
     /**

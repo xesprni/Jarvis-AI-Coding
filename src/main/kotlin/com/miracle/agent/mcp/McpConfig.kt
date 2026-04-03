@@ -232,6 +232,33 @@ object McpConfigManager {
     }
 
     /**
+     * 向指定配置文件中添加一个服务器配置
+     *
+     * @param file 目标配置文件
+     * @param serverName 服务器名称
+     * @param config 服务器配置
+     * @return 是否成功添加（已存在同名服务器时返回 false）
+     */
+    fun addServerToFile(file: File, serverName: String, config: McpServerConfig): Boolean {
+        val currentServers = if (file.exists()) {
+            readConfigFileServers(file).toMutableMap()
+        } else {
+            mutableMapOf()
+        }
+        if (currentServers.containsKey(serverName)) {
+            return false
+        }
+        currentServers[serverName] = config
+        return runCatching {
+            writeConfigFile(file, currentServers)
+            true
+        }.getOrElse {
+            LOG.warn("Failed to add MCP server $serverName to ${file.absolutePath}: ${it.message}")
+            false
+        }
+    }
+
+    /**
      * 在编辑器中打开指定范围的 MCP 配置文件，文件不存在时自动创建
      *
      * @param project IntelliJ 项目实例
