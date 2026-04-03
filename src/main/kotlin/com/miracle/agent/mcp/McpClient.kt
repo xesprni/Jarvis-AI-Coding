@@ -18,7 +18,6 @@ import io.modelcontextprotocol.kotlin.sdk.client.StreamableHttpClientTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.runBlocking
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
@@ -35,10 +34,13 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class McpClient(
     clientInfo: Implementation = Implementation(name = "default-mcp-client", version = "1.0.0")
-) : AutoCloseable {
+) {
     /** MCP 协议客户端实例 */
     private val mcp: Client = Client(clientInfo)
     private val LOG = Logger.getInstance(McpClient::class.java)
+    /** stdio 模式下的子进程引用，用于关闭时释放资源 */
+    @Volatile
+    private var process: Process? = null
 
     /**
      * 根据服务器配置连接到 MCP 服务器
@@ -82,6 +84,7 @@ class McpClient(
             }
             ensureCommandDirectoryInPath(env, resolvedCommand)
         }.start()
+        this.process = process
         val transport = StdioClientTransport(
             input = process.inputStream.asSource().buffered(),
             output = process.outputStream.asSink().buffered(),
@@ -92,6 +95,7 @@ class McpClient(
                 mcp.connect(transport)
             }
         } catch (t: Throwable) {
+            this.process = null
             process.destroyForcibly()
             throw t
         }
@@ -174,9 +178,11 @@ class McpClient(
     /**
      * 关闭 MCP 客户端连接并释放资源
      */
-    override fun close() {
-        runBlocking {
-            mcp.close()
+    suspend fun close() {
+        runCatching { mcp.close() }
+        process?.let {
+            this.process = null
+            it.destroyForcibly()
         }
     }
 
@@ -211,7 +217,7 @@ class McpClient(
 
         val orderedEntries = buildList {
             add(commandDir)
-            addAll(fallbackExecutableDirectories().filter { File(it).exists() })
+            addAll(fallbackDirs.filter { File(it).exists() })
             addAll(existingEntries)
         }
         val seen = mutableSetOf<String>()
@@ -244,8 +250,8 @@ class McpClient(
             return commandFile.absolutePath
         }
         PathEnvironmentVariableUtil.findExecutableInPathOnAnyOS(command)?.let { return it.absolutePath }
-        val fallbackDirs = fallbackExecutableDirectories()
-        fallbackDirs.map { File(it, command) }
+        val candidateDirs = fallbackDirs
+        candidateDirs.map { File(it, command) }
             .firstOrNull { it.exists() && it.canExecute() }
             ?.let { return it.absolutePath }
 
@@ -254,10 +260,11 @@ class McpClient(
 
     /**
      * 获取常见包管理器和运行时的可执行文件目录列表，作为 PATH 查找的回退方案
-     *
-     * @return 候选可执行文件目录列表
+     * 使用 lazy 缓存避免重复构建
      */
-    private fun fallbackExecutableDirectories(): List<String> {
+    private val fallbackDirs: List<String> by lazy { buildFallbackDirectories() }
+
+    private fun buildFallbackDirectories(): List<String> {
         val home = System.getProperty("user.home")
         val osName = System.getProperty("os.name")?.lowercase()
         return buildList {

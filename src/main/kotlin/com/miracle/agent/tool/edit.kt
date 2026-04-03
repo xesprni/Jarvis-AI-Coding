@@ -163,13 +163,29 @@ Usage:
      * @return 工具展示片段
      */
     override suspend fun handlePartialBlock(toolRequestId: String, partialArgs: Map<String, JsonField>, taskState: TaskState, isPartial: Boolean): ToolSegment? {
-        if (isPartial) return null
+        val filePath = partialArgs["file_path"]?.takeIf { it.isComplete }?.value?.let { normalizeFilePath(it, taskState.project) } ?: return null
+        val oldString = partialArgs["old_string"]?.value?.let { replaceContentLineEnding(it, LineEndingType.LF) } ?: ""
+        val newString = partialArgs["new_string"]?.value?.let { replaceContentLineEnding(it, LineEndingType.LF) } ?: ""
 
-        val filePath = normalizeFilePath(partialArgs["file_path"]!!.value, taskState.project)
+        // 流式传输中：只更新 UI 展示，不读文件、不弹 diff、不记录观测
+        if (isPartial) {
+            return ToolSegment(
+                UiToolName.EDITED_EXISTING_FILE,
+                filePath,
+                "------- SEARCH\n$oldString\n=======\n$newString\n+++++++ REPLACE",
+                mapOf(
+                    "oldString" to JsonPrimitive(oldString),
+                    "newString" to JsonPrimitive(newString),
+                    "agent_name" to JsonPrimitive(
+                        if (taskState.agentId != "default") taskState.agentId else "Jarvis"
+                    ),
+                )
+            )
+        }
+
+        // 参数完整：读取文件、展示 diff、记录观测
         var oldContent = PsiFileUtils.getFileContent(taskState.project, filePath) ?: throw ToolExecutionException("File not found: $filePath")
         oldContent = replaceContentLineEnding(oldContent, LineEndingType.LF)
-        val oldString = replaceContentLineEnding(partialArgs["old_string"]!!.value, LineEndingType.LF)
-        val newString = replaceContentLineEnding(partialArgs["new_string"]!!.value, LineEndingType.LF)
         val replaceAll = partialArgs["replace_all"]?.value?.toBoolean() ?: false
         val newContent = if (replaceAll) oldContent.replace(oldString, newString) else oldContent.replaceFirst(oldString, newString)
 

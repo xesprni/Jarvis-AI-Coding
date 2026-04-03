@@ -51,6 +51,8 @@ class McpClientHub(private val project: Project) : Disposable {
     private val desiredToggleState: MutableMap<String, Boolean> = ConcurrentHashMap()
     private var configMonitor: FileAlterationMonitor? = null
     private val configObservers: MutableList<FileAlterationObserver> = mutableListOf()
+    /** 配置文件变更防抖任务 */
+    private var reloadJob: Job? = null
 
     @Volatile
     /** 当前生效的 MCP 配置 */
@@ -68,6 +70,8 @@ class McpClientHub(private val project: Project) : Disposable {
     companion object {
     /** 配置文件轮询监听间隔（毫秒） */
     private const val CONFIG_WATCH_INTERVAL_MS = 1000L
+    /** 配置文件变更防抖间隔（毫秒） */
+    private const val RELOAD_DEBOUNCE_MS = 500L
     /** 配置文件名 */
     private const val CONFIG_FILE_NAME = "mcp_settings.json"
     /** 启用/禁用操作防抖间隔（毫秒） */
@@ -144,7 +148,7 @@ class McpClientHub(private val project: Project) : Disposable {
             serverStatus.remove(serverName)
             connectionErrors.remove(serverName)
             connectionJobs.remove(serverName)?.cancel()
-            clients.remove(serverName)?.close()
+            closeClientSafely(clients.remove(serverName))
         }
         config.servers.forEach { (name, serverConfig) ->
             if (serverConfig.isEnabled()) {
@@ -171,7 +175,7 @@ class McpClientHub(private val project: Project) : Disposable {
         serverStatus[name] = true
         connectionErrors.remove(name)
         connectionJobs.remove(name)?.cancel()
-        clients.remove(name)?.close()
+        closeClientSafely(clients.remove(name))
         val client = McpClient(Implementation(name = name, version = "1.0.0"))
         val job = connectionScope.launch {
             try {
@@ -214,7 +218,7 @@ class McpClientHub(private val project: Project) : Disposable {
         job?.cancel()
 
         val client = clients.remove(serverName)
-        client?.close()
+        closeClientSafely(client)
 
         val removedStatus = serverStatus.remove(serverName) != null
         val removedError = connectionErrors.remove(serverName) != null
@@ -324,7 +328,7 @@ class McpClientHub(private val project: Project) : Disposable {
             }
             // 否则取消连接任务、关闭客户端、清理状态并通知UI
             connectionJobs.remove(serverName)?.cancel()
-            clients.remove(serverName)?.close()
+            closeClientSafely(clients.remove(serverName))
             serverStatus[serverName] = false
             connectionErrors.remove(serverName)
             notifyConfigReloaded(refreshStatusPanel = true, refreshMarketPanel = false)
@@ -451,9 +455,8 @@ class McpClientHub(private val project: Project) : Disposable {
      * 获取当前项目下所有已连接 MCP 工具对应的 Agent Tool 实例
      */
     suspend fun instantiate(): List<com.miracle.agent.tool.Tool<*>> {
-        val currentProject = getCurrentProject()?.takeIf { true } ?: return emptyList()
-        val hub = getInstance(currentProject).apply { ensureInitialized() }
-        val descriptors = hub.getConnectedMcpTools()
+        ensureInitialized()
+        val descriptors = getConnectedMcpTools()
         if (descriptors.isEmpty()) {
             return emptyList()
         }
@@ -514,7 +517,7 @@ class McpClientHub(private val project: Project) : Disposable {
                         private fun handleChange(file: File?) {
                             if (file?.name == CONFIG_FILE_NAME) {
                                 LOG.debug("MCP config file changed for ${project.name} in $normalizedDir, triggering reload...")
-                                reloadConfig()
+                                scheduleReloadConfig()
                             }
                         }
 
@@ -550,8 +553,19 @@ class McpClientHub(private val project: Project) : Disposable {
 
 
     /**
+     * 调度配置重加载，带防抖机制避免频繁触发
+     */
+    private fun scheduleReloadConfig() {
+        reloadJob?.cancel()
+        reloadJob = connectionScope.launch {
+            delay(RELOAD_DEBOUNCE_MS.milliseconds)
+            reloadConfig()
+        }
+    }
+
+    /**
      * 重新加载配置
-     * 
+     *
      */
     private fun reloadConfig() {
         try {
@@ -596,7 +610,7 @@ class McpClientHub(private val project: Project) : Disposable {
                 } else {
                     // 禁用状态: 取消连接任务、关闭客户端、标记为禁用并清除错误记录
                     connectionJobs.remove(name)?.cancel()
-                    clients.remove(name)?.close()
+                    closeClientSafely(clients.remove(name))
                     serverStatus[name] = false
                     if (config.note.isNullOrBlank()) {
                         connectionErrors.remove(name)
@@ -671,14 +685,24 @@ class McpClientHub(private val project: Project) : Disposable {
      */
     fun shutdown() {
         stopConfigWatcher()
+        reloadJob?.cancel()
+        reloadJob = null
         connectionJobs.values.forEach { it.cancel() }
         connectionJobs.clear()
         toggleJobs.values.forEach { it.cancel() }
         toggleJobs.clear()
         desiredToggleState.clear()
-        scopeJob.cancelChildren()
-        clients.values.forEach { it.close() }
+        // 先关闭客户端再取消协程作用域，确保 close() 在协程上下文中执行
+        val clientsToClose = clients.values.toList()
         clients.clear()
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                clientsToClose.forEach { client ->
+                    runCatching { client.close() }
+                }
+            }
+        }
+        scopeJob.cancelChildren()
         serverStatus.clear()
         connectionErrors.clear()
         synchronized(initLock) {
@@ -690,6 +714,18 @@ class McpClientHub(private val project: Project) : Disposable {
 
     override fun dispose() {
         shutdown()
+    }
+
+    /**
+     * 安全关闭 MCP 客户端，在协程中执行以支持 suspend close()
+     *
+     * @param client 待关闭的客户端实例
+     */
+    private fun closeClientSafely(client: McpClient?) {
+        if (client == null) return
+        connectionScope.launch {
+            runCatching { client.close() }
+        }
     }
 
     /**
@@ -708,6 +744,10 @@ class McpClientHub(private val project: Project) : Disposable {
         return try {
             action(client.getClient())
         } catch (e: Exception) {
+            // 再次检查 client 是否已被其他线程移除
+            if (clients[serverName] != client) {
+                throw e
+            }
             LOG.warn("Error using MCP client for server $serverName: ${e.message}, attempting to reconnect...", e)
             val reconnected = reconnectServer(serverName)
             if (!reconnected) {

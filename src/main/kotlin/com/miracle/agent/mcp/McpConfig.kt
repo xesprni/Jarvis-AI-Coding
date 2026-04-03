@@ -158,8 +158,7 @@ object McpConfigManager {
      */
     fun getEnabledServers(project: Project? = null): List<Pair<String, McpServerConfig>> {
         return getConfig(project).servers.mapNotNull { (name, config) ->
-            val normalized = normalizeConfig(config)
-            if (normalized.isEnabled()) name to normalized else null
+            if (config.isEnabled()) name to config else null
         }
     }
 

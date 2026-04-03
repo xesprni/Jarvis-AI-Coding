@@ -201,7 +201,7 @@ class McpServerToolInstance(
                 resultForAssistant = renderResultForAssistant(data)
             )
         } catch (e: Exception) {
-            val errorMessage = "Failed to execute MCP tool $serverName/$remoteTool.name: ${e.message}"
+            val errorMessage = "Failed to execute MCP tool $serverName/${remoteTool.name}: ${e.message}"
             LOG.warn(errorMessage, e)
             throw ToolExecutionException(errorMessage)
         }

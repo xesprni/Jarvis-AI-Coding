@@ -6,7 +6,11 @@ import com.intellij.openapi.project.Project
 import com.miracle.agent.mcp.McpClientHub
 import com.miracle.agent.mcp.McpServerConfig
 import io.modelcontextprotocol.kotlin.sdk.Tool
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * MCP 状态面板的 ViewModel，负责数据获取和业务逻辑
@@ -14,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 class McpStatusViewModel(private val project: Project) {
 
     private val log = Logger.getInstance(McpStatusViewModel::class.java)
+    private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
      * MCP 状态面板的 UI 状态
@@ -54,19 +59,19 @@ class McpStatusViewModel(private val project: Project) {
     fun refresh() {
         stateListener?.invoke(UiState.Loading)
 
-        ApplicationManager.getApplication().executeOnPooledThread {
+        viewModelScope.launch {
             try {
                 val hub = McpClientHub.getInstance(project)
                 hub.ensureInitialized()
 
                 val statuses = hub.getAllServerStatus()
                 val connectedServers = hub.getAllClients().keys
-                val toolMap = runBlocking { hub.getAllServerTools() }
+                val toolMap = hub.getAllServerTools()
                 val connectionErrors = hub.getConnectionErrors()
 
                 if (statuses.isEmpty()) {
                     notifyState(UiState.Empty)
-                    return@executeOnPooledThread
+                    return@launch
                 }
 
                 val servers = statuses.toSortedMap().map { (serverName, enabled) ->
@@ -122,5 +127,12 @@ class McpStatusViewModel(private val project: Project) {
         ApplicationManager.getApplication().invokeLater {
             stateListener?.invoke(state)
         }
+    }
+
+    /**
+     * 释放 ViewModel 资源，取消所有进行中的协程任务
+     */
+    fun dispose() {
+        viewModelScope.cancel()
     }
 }

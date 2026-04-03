@@ -3,6 +3,7 @@ package com.miracle.agent.mcp
 import com.intellij.openapi.project.Project
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * MCP Prompt集成
@@ -14,10 +15,10 @@ object McpPromptIntegration {
     }
 
     //已注册的工具名称集合,不按照项目区分，只能自动审批使用!!
-    val toolsNameSet: MutableSet<String> = mutableSetOf()
+    val toolsNameSet: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     //已注册的工具自动审批集合,不按照项目区分，只能自动审批使用!!
-    val toolsAutoApproveSet: MutableSet<String> = mutableSetOf()
+    val toolsAutoApproveSet: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
 
     /**
