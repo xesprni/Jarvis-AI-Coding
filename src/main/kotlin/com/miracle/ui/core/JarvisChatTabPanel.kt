@@ -696,7 +696,8 @@ class JarvisChatTabPanel(
     ) {
         val existing = assistantCards[key]
         if (existing != null) {
-            existing.updateContent(segments, type, partial)
+            val merged = mergeMcpSegmentsIfNeeded(existing.lastSegments, segments)
+            existing.updateContent(merged, type, partial)
             messageContainer.revalidate()
             messageContainer.repaint()
             if (partial) {
@@ -715,6 +716,18 @@ class JarvisChatTabPanel(
         messageContainer.revalidate()
         messageContainer.repaint()
         if (!partial) partialCards.remove(key)
+    }
+
+    /**
+     * 当新段包含 MCP_TOOL_RESPONSE 且旧段包含 MCP_TOOL 时，
+     * 将响应段追加到旧段列表后（调用与响应在同一卡片内分开展示）。
+     */
+    private fun mergeMcpSegmentsIfNeeded(oldSegments: List<Segment>, newSegments: List<Segment>): List<Segment> {
+        val hasMcpResponse = newSegments.any {
+            it is ToolSegment && it.name == UiToolName.MCP_TOOL_RESPONSE
+        }
+        if (!hasMcpResponse) return newSegments
+        return oldSegments + newSegments
     }
 
     private fun finalizePartialCards() {

@@ -320,9 +320,19 @@ internal class ToolViewerFactory(
     // ── MCP viewer ───────────────────────────────────────────────────
 
     private fun createMcpViewer(segment: ToolSegment): JComponent {
+        return when (segment.name) {
+            UiToolName.MCP_TOOL -> createMcpCallViewer(segment)
+            UiToolName.MCP_TOOL_RESPONSE -> createMcpResponseViewer(segment)
+            else -> JPanel()
+        }
+    }
+
+    /**
+     * MCP 调用展示：描述、参数 schema、调用参数
+     */
+    private fun createMcpCallViewer(segment: ToolSegment): JComponent {
         val description = segment.params["tool_description"]?.toString()?.trim('"')
         val serverName = segment.params["server_name"]?.toString()?.trim('"')
-        val callArguments = segment.params["call_arguments"]
         val inputSchema = segment.params["input_schema"]?.jsonObject
         val content = prettyToolContent(segment.toolContent)
         return JPanel().apply {
@@ -332,13 +342,14 @@ internal class ToolViewerFactory(
             border = JBUI.Borders.empty(8, 12, 8, 12)
             // Tool description
             if (!description.isNullOrBlank()) {
-                add(renderer.createMarkdownBlock(description))
+                add(createLeftAlignedBlock(description))
                 add(Box.createVerticalStrut(JBUI.scale(8)))
             }
             if (!serverName.isNullOrBlank()) {
                 add(JBLabel("Server: $serverName").apply {
                     foreground = MUTED_FOREGROUND; font = JBFont.small()
                     border = JBUI.Borders.emptyBottom(6)
+                    alignmentX = Component.LEFT_ALIGNMENT
                 })
             }
             // Parameter schema
@@ -355,7 +366,24 @@ internal class ToolViewerFactory(
                     add(Box.createVerticalStrut(JBUI.scale(8)))
                 }
             }
-            // Call arguments
+            // Call arguments (from toolContent)
+            add(createSmallSectionLabel("Arguments", AllIcons.Actions.Edit))
+            add(renderer.createSyntaxViewer(content, "mcp.json", preferredHeight = 180))
+        }
+    }
+
+    /**
+     * MCP 响应展示：仅展示调用参数（如有）和响应内容
+     */
+    private fun createMcpResponseViewer(segment: ToolSegment): JComponent {
+        val callArguments = segment.params["call_arguments"]
+        val content = prettyToolContent(segment.toolContent)
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = true
+            background = TOOL_CONTENT_BACKGROUND
+            border = JBUI.Borders.empty(8, 12, 8, 12)
+            // Call arguments (if present in response)
             if (callArguments != null) {
                 add(createSmallSectionLabel("Arguments", AllIcons.Actions.Edit))
                 add(renderer.createSyntaxViewer(
@@ -364,10 +392,20 @@ internal class ToolViewerFactory(
                     preferredHeight = 180
                 ))
                 add(Box.createVerticalStrut(JBUI.scale(8)))
-                add(createSmallSectionLabel("Response", AllIcons.Nodes.Plugin))
             }
+            add(createSmallSectionLabel("Response", AllIcons.Nodes.Plugin))
             add(renderer.createSyntaxViewer(content, "mcp.json", preferredHeight = 180))
         }
+    }
+
+    /**
+     * 创建左对齐的 Markdown 文本块，确保在 BoxLayout 中正确左对齐
+     */
+    private fun createLeftAlignedBlock(markdown: String): JComponent {
+        val block = renderer.createMarkdownBlock(markdown)
+        block.maximumSize = Dimension(Int.MAX_VALUE, block.preferredSize.height)
+        block.alignmentX = Component.LEFT_ALIGNMENT
+        return block
     }
 
     /**
@@ -381,74 +419,67 @@ internal class ToolViewerFactory(
         val enumValues = schemaObj["enum"]?.jsonArray
             ?.mapNotNull { it.jsonPrimitive.contentOrNull }
             ?.takeIf { it.isNotEmpty() }
-        return JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
             border = JBUI.Borders.empty(3, 0)
-            // Left: name + type + badges
-            val leftPanel = JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            alignmentX = Component.LEFT_ALIGNMENT
+            // Line 1: param name
+            add(JBLabel(name).apply {
+                font = JBFont.label().asBold()
+                foreground = JBColor.foreground()
+                alignmentX = Component.LEFT_ALIGNMENT
+            })
+            // Line 2: type + required/optional badge + default badge
+            add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
                 isOpaque = false
-                alignmentY = Component.TOP_ALIGNMENT
-                // Line 1: param name
-                add(JBLabel(name).apply {
-                    font = JBFont.label().asBold()
-                    foreground = JBColor.foreground()
+                border = JBUI.Borders.emptyTop(2)
+                alignmentX = Component.LEFT_ALIGNMENT
+                add(createBadgeLabel(
+                    text = type,
+                    background = ChatTheme.PLAN_BADGE_BACKGROUND,
+                    foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
+                    borderColor = ChatTheme.PLAN_BADGE_BORDER,
+                ))
+                add(createBadgeLabel(
+                    text = if (required) "required" else "optional",
+                    background = if (required) ChatTheme.ASK_BADGE_APPROVAL_BACKGROUND else ChatTheme.PLAN_BADGE_BACKGROUND,
+                    foreground = if (required) ChatTheme.ASK_BADGE_APPROVAL_FOREGROUND else ChatTheme.PLAN_BADGE_FOREGROUND,
+                    borderColor = if (required) ChatTheme.ASK_BADGE_APPROVAL_BORDER else ChatTheme.PLAN_BADGE_BORDER,
+                ))
+                if (default != null) {
+                    add(createBadgeLabel(
+                        text = "default: ${default.jsonPrimitive.contentOrNull ?: default.toString()}",
+                        background = ChatTheme.PLAN_BADGE_BACKGROUND,
+                        foreground = ChatTheme.MUTED_FOREGROUND,
+                        borderColor = ChatTheme.PLAN_BADGE_BORDER,
+                    ))
+                }
+            })
+            // Line 3: description (if any)
+            if (!desc.isNullOrBlank()) {
+                add(JBLabel("<html><body style='width:100%'>$desc</body></html>").apply {
+                    foreground = MUTED_FOREGROUND
+                    font = JBFont.small()
+                    border = JBUI.Borders.emptyTop(2)
+                    alignmentX = Component.LEFT_ALIGNMENT
                 })
-                // Line 2: type + required badge
+            }
+            // Line 4: enum values (if any)
+            if (!enumValues.isNullOrEmpty()) {
                 add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
                     isOpaque = false
                     border = JBUI.Borders.emptyTop(2)
-                    add(createBadgeLabel(
-                        text = type,
-                        background = ChatTheme.PLAN_BADGE_BACKGROUND,
-                        foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
-                        borderColor = ChatTheme.PLAN_BADGE_BORDER,
-                    ))
-                    add(createBadgeLabel(
-                        text = if (required) "required" else "optional",
-                        background = if (required) ChatTheme.ASK_BADGE_APPROVAL_BACKGROUND else ChatTheme.PLAN_BADGE_BACKGROUND,
-                        foreground = if (required) ChatTheme.ASK_BADGE_APPROVAL_FOREGROUND else ChatTheme.PLAN_BADGE_FOREGROUND,
-                        borderColor = if (required) ChatTheme.ASK_BADGE_APPROVAL_BORDER else ChatTheme.PLAN_BADGE_BORDER,
-                    ))
-                    if (default != null) {
+                    alignmentX = Component.LEFT_ALIGNMENT
+                    enumValues.forEach { value ->
                         add(createBadgeLabel(
-                            text = "default: ${default.jsonPrimitive.contentOrNull ?: default.toString()}",
+                            text = value,
                             background = ChatTheme.PLAN_BADGE_BACKGROUND,
-                            foreground = ChatTheme.MUTED_FOREGROUND,
+                            foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
                             borderColor = ChatTheme.PLAN_BADGE_BORDER,
                         ))
                     }
                 })
-            }
-            add(leftPanel, BorderLayout.CENTER)
-            // Right: description
-            if (!desc.isNullOrBlank() || !enumValues.isNullOrEmpty()) {
-                val rightPanel = JPanel().apply {
-                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
-                    isOpaque = false
-                    alignmentY = Component.TOP_ALIGNMENT
-                    if (!desc.isNullOrBlank()) {
-                        add(JBLabel("<html><body style='width:300px'>$desc</body></html>").apply {
-                            foreground = MUTED_FOREGROUND
-                            font = JBFont.small()
-                        })
-                    }
-                    if (!enumValues.isNullOrEmpty()) {
-                        add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
-                            isOpaque = false
-                            border = JBUI.Borders.emptyTop(2)
-                            enumValues.forEach { value ->
-                                add(createBadgeLabel(
-                                    text = value,
-                                    background = ChatTheme.PLAN_BADGE_BACKGROUND,
-                                    foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
-                                    borderColor = ChatTheme.PLAN_BADGE_BORDER,
-                                ))
-                            }
-                        })
-                    }
-                }
-                add(rightPanel, BorderLayout.EAST)
             }
         }
     }
@@ -556,9 +587,9 @@ internal class ToolViewerFactory(
                 JBUI.Borders.empty(10, 12),
             )
             alignmentX = Component.LEFT_ALIGNMENT
-            add(badge)
+            add(badge.also { it.alignmentX = Component.LEFT_ALIGNMENT })
             add(Box.createVerticalStrut(JBUI.scale(8)))
-            add(renderer.createMarkdownBlock(prompt))
+            add(createLeftAlignedBlock(prompt))
             add(Box.createVerticalStrut(JBUI.scale(8)))
             add(JBLabel("<html><body>$helper</body></html>").apply {
                 font = JBFont.small()

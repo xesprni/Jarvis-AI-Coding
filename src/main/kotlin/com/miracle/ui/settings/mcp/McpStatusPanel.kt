@@ -152,7 +152,7 @@ class McpStatusPanel(
             maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
         }
 
-        val addButton = JButton("+ 新增", AllIcons.General.Add).apply {
+        val addButton = JButton("新增", AllIcons.General.Add).apply {
             toolTipText = "新增 MCP 服务器配置"
             isOpaque = false
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)

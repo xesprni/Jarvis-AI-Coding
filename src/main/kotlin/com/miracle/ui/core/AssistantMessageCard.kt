@@ -28,7 +28,7 @@ internal class AssistantMessageCard(
 ) {
     private val shell = renderer.createMessageShell("Jarvis", JARVIS_ICON, alignRight = false)
     val root: JComponent = shell.root
-    private var lastSegments: List<Segment> = emptyList()
+    internal var lastSegments: List<Segment> = emptyList()
     private var lastType: AgentMessageType = AgentMessageType.TEXT
     private var lastPartial: Boolean = false
     private var thoughtPanel: ThoughtProcessPanel? = null
