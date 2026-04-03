@@ -1,5 +1,6 @@
 package com.miracle.ui.core
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -17,6 +18,12 @@ import com.miracle.ui.core.ChatTheme.TOOL_CONTENT_BACKGROUND
 import com.miracle.agent.tool.RequestUserInputQuestion
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants
 import java.awt.BorderLayout
 import java.awt.Color
@@ -315,12 +322,15 @@ internal class ToolViewerFactory(
     private fun createMcpViewer(segment: ToolSegment): JComponent {
         val description = segment.params["tool_description"]?.toString()?.trim('"')
         val serverName = segment.params["server_name"]?.toString()?.trim('"')
+        val callArguments = segment.params["call_arguments"]
+        val inputSchema = segment.params["input_schema"]?.jsonObject
         val content = prettyToolContent(segment.toolContent)
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = true
             background = TOOL_CONTENT_BACKGROUND
             border = JBUI.Borders.empty(8, 12, 8, 12)
+            // Tool description
             if (!description.isNullOrBlank()) {
                 add(renderer.createMarkdownBlock(description))
                 add(Box.createVerticalStrut(JBUI.scale(8)))
@@ -331,7 +341,115 @@ internal class ToolViewerFactory(
                     border = JBUI.Borders.emptyBottom(6)
                 })
             }
+            // Parameter schema
+            if (inputSchema != null) {
+                val properties = inputSchema["properties"]?.jsonObject
+                val requiredList = inputSchema["required"]?.jsonArray
+                    ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    ?.toSet().orEmpty()
+                if (properties != null && properties.isNotEmpty()) {
+                    add(createSmallSectionLabel("Parameters", AllIcons.Nodes.Parameter))
+                    properties.forEach { (paramName, paramSchema) ->
+                        add(createParamRow(paramName, paramSchema, paramName in requiredList))
+                    }
+                    add(Box.createVerticalStrut(JBUI.scale(8)))
+                }
+            }
+            // Call arguments
+            if (callArguments != null) {
+                add(createSmallSectionLabel("Arguments", AllIcons.Actions.Edit))
+                add(renderer.createSyntaxViewer(
+                    prettyJsonElement(callArguments),
+                    "mcp.json",
+                    preferredHeight = 180
+                ))
+                add(Box.createVerticalStrut(JBUI.scale(8)))
+                add(createSmallSectionLabel("Response", AllIcons.Nodes.Plugin))
+            }
             add(renderer.createSyntaxViewer(content, "mcp.json", preferredHeight = 180))
+        }
+    }
+
+    /**
+     * 创建单个参数描述行，展示参数名、类型、必填状态和描述
+     */
+    private fun createParamRow(name: String, schema: JsonElement, required: Boolean): JComponent {
+        val schemaObj = schema.jsonObject
+        val type = schemaObj["type"]?.jsonPrimitive?.contentOrNull ?: "any"
+        val desc = schemaObj["description"]?.jsonPrimitive?.contentOrNull
+        val default = schemaObj["default"]
+        val enumValues = schemaObj["enum"]?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            ?.takeIf { it.isNotEmpty() }
+        return JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
+            isOpaque = false
+            border = JBUI.Borders.empty(3, 0)
+            // Left: name + type + badges
+            val leftPanel = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                isOpaque = false
+                alignmentY = Component.TOP_ALIGNMENT
+                // Line 1: param name
+                add(JBLabel(name).apply {
+                    font = JBFont.label().asBold()
+                    foreground = JBColor.foreground()
+                })
+                // Line 2: type + required badge
+                add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
+                    isOpaque = false
+                    border = JBUI.Borders.emptyTop(2)
+                    add(createBadgeLabel(
+                        text = type,
+                        background = ChatTheme.PLAN_BADGE_BACKGROUND,
+                        foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
+                        borderColor = ChatTheme.PLAN_BADGE_BORDER,
+                    ))
+                    add(createBadgeLabel(
+                        text = if (required) "required" else "optional",
+                        background = if (required) ChatTheme.ASK_BADGE_APPROVAL_BACKGROUND else ChatTheme.PLAN_BADGE_BACKGROUND,
+                        foreground = if (required) ChatTheme.ASK_BADGE_APPROVAL_FOREGROUND else ChatTheme.PLAN_BADGE_FOREGROUND,
+                        borderColor = if (required) ChatTheme.ASK_BADGE_APPROVAL_BORDER else ChatTheme.PLAN_BADGE_BORDER,
+                    ))
+                    if (default != null) {
+                        add(createBadgeLabel(
+                            text = "default: ${default.jsonPrimitive.contentOrNull ?: default.toString()}",
+                            background = ChatTheme.PLAN_BADGE_BACKGROUND,
+                            foreground = ChatTheme.MUTED_FOREGROUND,
+                            borderColor = ChatTheme.PLAN_BADGE_BORDER,
+                        ))
+                    }
+                })
+            }
+            add(leftPanel, BorderLayout.CENTER)
+            // Right: description
+            if (!desc.isNullOrBlank() || !enumValues.isNullOrEmpty()) {
+                val rightPanel = JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                    isOpaque = false
+                    alignmentY = Component.TOP_ALIGNMENT
+                    if (!desc.isNullOrBlank()) {
+                        add(JBLabel("<html><body style='width:300px'>$desc</body></html>").apply {
+                            foreground = MUTED_FOREGROUND
+                            font = JBFont.small()
+                        })
+                    }
+                    if (!enumValues.isNullOrEmpty()) {
+                        add(JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
+                            isOpaque = false
+                            border = JBUI.Borders.emptyTop(2)
+                            enumValues.forEach { value ->
+                                add(createBadgeLabel(
+                                    text = value,
+                                    background = ChatTheme.PLAN_BADGE_BACKGROUND,
+                                    foreground = ChatTheme.PLAN_BADGE_FOREGROUND,
+                                    borderColor = ChatTheme.PLAN_BADGE_BORDER,
+                                ))
+                            }
+                        })
+                    }
+                }
+                add(rightPanel, BorderLayout.EAST)
+            }
         }
     }
 
@@ -487,5 +605,9 @@ internal class ToolViewerFactory(
             val element = Json.parseToJsonElement(content)
             PRETTY_JSON.encodeToString(JsonElement.serializer(), element)
         }.getOrDefault(content)
+    }
+
+    private fun prettyJsonElement(element: JsonElement): String {
+        return PRETTY_JSON.encodeToString(JsonElement.serializer(), element)
     }
 }

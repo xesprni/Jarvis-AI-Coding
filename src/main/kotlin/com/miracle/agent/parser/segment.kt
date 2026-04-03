@@ -86,6 +86,7 @@ val UI_TOOL_HEADERS = mapOf(
     UiToolName.TODO_UPDATE to ToolHeader("{{agent_name}} is updating todos:", AllIcons.General.TodoDefault),
     UiToolName.TASK_START to ToolHeader("{{agent_name}} wants to run task {{subagent_type}}:", AllIcons.Nodes.Plugin),
     UiToolName.TASK_END to ToolHeader("Task {{subagent_type}} done:", AllIcons.Nodes.Plugin),
+    UiToolName.MCP_TOOL to ToolHeader("MCP tool call to {{server_name}}/{{tool_name}}:", AllIcons.Nodes.Plugin),
     UiToolName.MCP_TOOL_RESPONSE to ToolHeader("MCP tool response from {{server_name}}/{{tool_name}}:", AllIcons.Nodes.Plugin),
     UiToolName.EXCEL_READ to ToolHeader("{{agent_name}} wants to read this Excel file", AllIcons.FileTypes.XsdFile),
     UiToolName.ASK_USER_QUESTION to ToolHeader("{{agent_name}} has a question for you:", AllIcons.General.BalloonInformation),

@@ -187,10 +187,15 @@ class McpServerToolInstance(
                             toolContent = buildResultText(
                                 data
                             ),
-                            params = mapOf(
-                                "server_name" to JsonPrimitive(serverName),
-                                "tool_name" to JsonPrimitive(remoteTool.name),
-                            )
+                            params = buildMap {
+                                put("server_name", JsonPrimitive(serverName))
+                                put("tool_name", JsonPrimitive(remoteTool.name))
+                                remoteTool.description?.takeIf { it.isNotBlank() }?.let {
+                                    put("tool_description", JsonPrimitive(it))
+                                }
+                                put("input_schema", buildInputSchemaInfo())
+                                normalizedArguments?.let { put("call_arguments", it) }
+                            }
                         )
                     )
                 )
@@ -230,6 +235,7 @@ class McpServerToolInstance(
         remoteTool.description?.takeIf { it.isNotBlank() }?.let {
             params["tool_description"] = JsonPrimitive(it)
         }
+        params["input_schema"] = buildInputSchemaInfo()
         val originParams = partialArgs.values.associate { it.name to it.value }
         return ToolSegment(
             name = UiToolName.MCP_TOOL, // 使用现有的 UI 工具名称
@@ -237,6 +243,19 @@ class McpServerToolInstance(
             params = params,
             toolContent = PRETTY_JSON.encodeToString(originParams),
         )
+    }
+
+    /**
+     * 构建工具输入参数的 schema 摘要信息，包含 properties 和 required 字段
+     */
+    private fun buildInputSchemaInfo(): JsonObject {
+        val schema = remoteTool.inputSchema
+        return buildJsonObject {
+            put("properties", schema.properties ?: JsonObject(emptyMap()))
+            putJsonArray("required") {
+                schema.required?.forEach { add(it) } ?: Unit
+            }
+        }
     }
 
     /**

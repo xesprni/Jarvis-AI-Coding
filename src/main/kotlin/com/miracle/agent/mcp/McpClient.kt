@@ -195,11 +195,8 @@ class McpClient(
      * @return 命令及其参数的列表
      */
     private fun buildCommand(serverConfig: McpServerConfig): List<String> {
-        return if (serverConfig.args.isNotEmpty()) {
-            listOf(serverConfig.command) + serverConfig.args
-        } else {
-            listOf(serverConfig.command)
-        }
+        val normalized = McpCommandLineParser.normalize(serverConfig.command, serverConfig.args)
+        return listOf(normalized.command) + normalized.args
     }
 
     /**

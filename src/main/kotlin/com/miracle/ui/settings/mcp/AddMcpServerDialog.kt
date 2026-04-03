@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
+import com.miracle.agent.mcp.McpCommandLineParser
 import com.miracle.agent.mcp.McpConfigManager
 import com.miracle.agent.mcp.McpInstallScope
 import com.miracle.agent.mcp.McpServerConfig
@@ -42,12 +43,12 @@ class AddMcpServerDialog(private val project: Project) : DialogWrapper(project) 
 
     private val commandField = JBTextField().apply {
         preferredSize = Dimension(JBUI.scale(400), preferredSize.height)
-        emptyText.text = "例如: npx -y @modelcontextprotocol/server-filesystem /tmp"
+        emptyText.text = "例如: npx 或 /absolute/path/to/server"
     }
 
     private val argsField = JBTextField().apply {
         preferredSize = Dimension(JBUI.scale(400), preferredSize.height)
-        emptyText.text = "可选，空格分隔的参数列表（含空格的参数用引号包裹）"
+        emptyText.text = "可选，例如: -y @modelcontextprotocol/server-filesystem /tmp"
     }
 
     private val urlField = JBTextField().apply {
@@ -277,6 +278,11 @@ class AddMcpServerDialog(private val project: Project) : DialogWrapper(project) 
         } else {
             emptyList()
         }
+        val normalizedStdioCommand = if (selectedType == TYPE_STDIO) {
+            McpCommandLineParser.normalize(commandField.text.trim(), argsList)
+        } else {
+            null
+        }
 
         val envMap = parseKeyValueMap(envTextArea.text)
         val headersMap = parseKeyValueMap(headersTextArea.text)
@@ -286,8 +292,8 @@ class AddMcpServerDialog(private val project: Project) : DialogWrapper(project) 
 
         val config = McpServerConfig(
             type = selectedType,
-            command = if (selectedType == TYPE_STDIO) commandField.text.trim() else "",
-            args = argsList,
+            command = normalizedStdioCommand?.command ?: "",
+            args = normalizedStdioCommand?.args ?: emptyList(),
             url = if (selectedType != TYPE_STDIO) urlField.text.trim() else "",
             env = envMap,
             headers = headersMap,
