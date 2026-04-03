@@ -13,9 +13,13 @@ sealed interface AssociatedContextItem {
      * 关联文件上下文项。
      *
      * @property path 文件路径
+     * @property suggested 是否为系统预测推荐的文件（默认 false，推荐文件置灰显示，点击后变为已选中）
+     * @property sourceLabel 推荐来源标签（如"同目录"、"import依赖"），仅推荐文件使用
      */
     data class AssociatedFile(
         val path: String,
+        val suggested: Boolean = false,
+        val sourceLabel: String? = null,
     ) : AssociatedContextItem {
         override val key: String = "file:$path"
 

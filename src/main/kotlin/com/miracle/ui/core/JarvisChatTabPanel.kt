@@ -31,6 +31,7 @@ import com.miracle.config.JarvisCoreSettings
 import com.miracle.services.getCustomModels
 import com.miracle.services.getSelectedModel
 import com.miracle.services.getSelectedModelId
+import com.miracle.services.RelatedFilePredictor
 import com.miracle.services.setSelectedModel
 import com.miracle.ui.core.ChatTheme.CARD_CHAT
 import com.miracle.ui.core.ChatTheme.CARD_WELCOME
@@ -181,6 +182,7 @@ class JarvisChatTabPanel(
         project = project,
         onAddRequested = ::showAssociatedFilePicker,
         onRemoveRequested = ::removeAssociatedContextItem,
+        onPredictedConfirmed = ::confirmPredictedFile,
     )
     private val composerCheckpointRestorePanel = ComposerCheckpointRestorePanel(
         onRestoreAll = { messageId ->
@@ -593,7 +595,7 @@ class JarvisChatTabPanel(
     }
 
     private fun updateAssociatedContextHeader() {
-        associatedContextHeader.setItems(associatedContextState.items())
+        associatedContextHeader.setItems(associatedContextState.allItems())
     }
 
     private fun showAssociatedFilePicker(anchor: Component) {
@@ -602,6 +604,31 @@ class JarvisChatTabPanel(
             existingPaths = associatedContextState.referencedFilePaths().toSet(),
         ) { file ->
             appendAssociatedFile(file.path)
+        }
+    }
+
+    /**
+     * 确认一个推荐的预测文件，将其从推荐状态变为已选中状态。
+     */
+    private fun confirmPredictedFile(file: AssociatedContextItem.AssociatedFile) {
+        if (associatedContextState.confirmPredicted(file)) {
+            updateAssociatedContextHeader()
+            triggerFilePrediction()
+        }
+    }
+
+    /**
+     * 基于当前上下文触发文件关联预测，更新推荐文件列表。
+     */
+    private fun triggerFilePrediction() {
+        val currentPaths = associatedContextState.referencedFilePaths().toSet()
+            .plus(associatedContextState.predictedFiles().map { it.path }.toSet())
+        uiScope.launch {
+            val predicted = RelatedFilePredictor.predict(project, currentPaths)
+            withContext(Dispatchers.EDT) {
+                associatedContextState.setPredictedFiles(predicted)
+                updateAssociatedContextHeader()
+            }
         }
     }
 

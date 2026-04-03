@@ -11,18 +11,34 @@ internal sealed interface AssociatedContextAddResult {
 }
 
 /**
- * 管理聊天输入框的关联上下文状态，包括文件引用和代码选区。
+ * 管理聊天输入框的关联上下文状态，包括文件引用、代码选区和系统推荐文件。
  */
 internal class AssociatedContextState {
     /** 已添加的关联上下文项映射，键为唯一标识 */
     private val items = linkedMapOf<String, AssociatedContextItem>()
+    /** 系统预测推荐的文件列表（置灰显示，点击后加入 items） */
+    private val predictedItems = linkedMapOf<String, AssociatedContextItem.AssociatedFile>()
 
     /**
-     * 获取所有关联上下文项。
+     * 获取所有已选中的关联上下文项（不含推荐文件）。
      *
      * @return 上下文项列表
      */
     fun items(): List<AssociatedContextItem> = items.values.toList()
+
+    /**
+     * 获取所有推荐文件（未选中的预测项）。
+     *
+     * @return 推荐文件列表
+     */
+    fun predictedFiles(): List<AssociatedContextItem.AssociatedFile> = predictedItems.values.toList()
+
+    /**
+     * 获取所有项（已选中 + 推荐），用于渲染。
+     *
+     * @return 全部上下文项列表
+     */
+    fun allItems(): List<AssociatedContextItem> = items.values.toList() + predictedItems.values.toList()
 
     /**
      * 添加关联上下文项，如已存在则返回 Existing 结果。
@@ -49,9 +65,10 @@ internal class AssociatedContextState {
         items.remove(item.key)
     }
 
-    /** 清空所有关联上下文项。 */
+    /** 清空所有关联上下文项和推荐文件。 */
     fun clear() {
         items.clear()
+        predictedItems.clear()
     }
 
     /**
@@ -62,7 +79,7 @@ internal class AssociatedContextState {
     fun isEmpty(): Boolean = items.isEmpty()
 
     /**
-     * 获取所有关联文件的路径列表。
+     * 获取所有关联文件的路径列表（仅已选中的文件）。
      *
      * @return 文件路径列表
      */
@@ -79,5 +96,42 @@ internal class AssociatedContextState {
      */
     fun codeSelections(): List<AssociatedContextItem.AssociatedCodeSelection> {
         return items.values.filterIsInstance<AssociatedContextItem.AssociatedCodeSelection>()
+    }
+
+    /**
+     * 更新推荐的文件列表，替换之前的所有推荐。
+     * 过滤掉已选中的文件和已存在的推荐文件。
+     *
+     * @param files 新的推荐文件列表
+     */
+    fun setPredictedFiles(files: List<AssociatedContextItem.AssociatedFile>) {
+        predictedItems.clear()
+        files.forEach { file ->
+            if (!items.containsKey(file.key)) {
+                predictedItems[file.key] = file
+            }
+        }
+    }
+
+    /**
+     * 确认一个推荐文件，将其从推荐列表移到已选中列表。
+     *
+     * @param file 要确认的推荐文件
+     * @return 是否成功确认（推荐列表中不存在则返回 false）
+     */
+    fun confirmPredicted(file: AssociatedContextItem.AssociatedFile): Boolean {
+        if (!predictedItems.containsKey(file.key)) return false
+        predictedItems.remove(file.key)
+        items[file.key] = file.copy(suggested = false, sourceLabel = null)
+        return true
+    }
+
+    /**
+     * 移除一个推荐文件。
+     *
+     * @param file 要移除的推荐文件
+     */
+    fun removePredicted(file: AssociatedContextItem.AssociatedFile) {
+        predictedItems.remove(file.key)
     }
 }
