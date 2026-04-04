@@ -579,7 +579,10 @@ class JarvisChatTabPanel(
 
     private fun addAssociatedContextItem(item: AssociatedContextItem) {
         when (val result = associatedContextState.add(item)) {
-            AssociatedContextAddResult.Added -> updateAssociatedContextHeader()
+            AssociatedContextAddResult.Added -> {
+                updateAssociatedContextHeader()
+                triggerFilePrediction()
+            }
             is AssociatedContextAddResult.Existing -> associatedContextHeader.highlightItem(result.key)
         }
     }
@@ -587,6 +590,7 @@ class JarvisChatTabPanel(
     private fun removeAssociatedContextItem(item: AssociatedContextItem) {
         associatedContextState.remove(item)
         updateAssociatedContextHeader()
+        triggerFilePrediction()
     }
 
     private fun clearAssociatedContextItems() {
