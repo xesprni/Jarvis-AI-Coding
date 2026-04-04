@@ -135,6 +135,8 @@ class JarvisChatTabPanel(
     private val partialCards = linkedMapOf<String, AssistantMessageCard>()
     /** 用户消息的头部面板映射，用于安装回滚操作 */
     private val userMessageHeaders = linkedMapOf<String, JPanel>()
+    /** 已安装 SelectionListener 的编辑器，避免重复安装 */
+    private val installedSelectionListeners = mutableSetOf<com.intellij.openapi.editor.Editor>()
 
     // ── Extracted collaborators ──────────────────────────────────────
     private val rollbackSupport = RollbackSupport(project)
@@ -661,9 +663,6 @@ class JarvisChatTabPanel(
     }
 
     // ── Editor selection auto-prediction ────────────────────────────────
-
-    /** 已安装 SelectionListener 的编辑器，避免重复安装 */
-    private val installedSelectionListeners = mutableSetOf<com.intellij.openapi.editor.Editor>()
 
     private fun installSelectionListenerIfNeeded(editor: com.intellij.openapi.editor.Editor) {
         installSelectionListenerFor(editor)
