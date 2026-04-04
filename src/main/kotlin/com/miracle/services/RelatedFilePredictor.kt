@@ -23,6 +23,7 @@ object RelatedFilePredictor {
 
     /** 推荐来源标签 */
     private const val SOURCE_SAME_DIR = "同目录"
+    private const val SOURCE_CURRENT = "当前文件"
     private const val SOURCE_RECENT = "最近打开"
 
     /**
@@ -38,6 +39,12 @@ object RelatedFilePredictor {
     ): List<AssociatedContextItem.AssociatedFile> = withContext(Dispatchers.Default) {
         val candidates = mutableListOf<Pair<VirtualFile, String>>()
         val seen = existingPaths.toMutableSet()
+
+        // 策略0: 当前编辑器中选中的文件
+        val currentFile = findCurrentEditorFile(project)
+        if (currentFile != null && seen.add(currentFile.path) && isRelevantFile(currentFile)) {
+            candidates.add(currentFile to SOURCE_CURRENT)
+        }
 
         // 策略1: 同目录文件
         val sameDirFiles = findSameDirectoryFiles(project, existingPaths)
@@ -62,6 +69,13 @@ object RelatedFilePredictor {
         }
 
         buildResult(candidates, seen)
+    }
+
+    /**
+     * 获取当前编辑器中选中的文件。
+     */
+    private fun findCurrentEditorFile(project: Project): VirtualFile? {
+        return FileEditorManager.getInstance(project).selectedTextEditor?.virtualFile
     }
 
     /**

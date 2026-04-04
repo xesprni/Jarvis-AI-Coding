@@ -5,6 +5,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
@@ -242,6 +243,16 @@ class JarvisChatTabPanel(
         sendButton.addActionListener { handlePrimaryAction() }
         stopButton.addActionListener { stopActiveTask() }
         applyComposerState(ComposerState.IDLE)
+
+        // 监听编辑器文件选择变化，自动触发关联文件预测
+        project.messageBus.connect(this).subscribe(
+            FileEditorManagerListener.TOPIC,
+            object : FileEditorManagerListener {
+                override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
+                    triggerFilePrediction()
+                }
+            }
+        )
 
         if (initialConversationId.isNullOrBlank()) {
             showWelcome()
