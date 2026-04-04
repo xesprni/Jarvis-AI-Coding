@@ -245,14 +245,27 @@ class JarvisChatTabPanel(
         applyComposerState(ComposerState.IDLE)
 
         // 监听编辑器文件选择变化，自动触发关联文件预测
-        project.messageBus.connect(this).subscribe(
-            FileEditorManagerListener.TOPIC,
+        val editorManager = FileEditorManager.getInstance(project)
+        editorManager.addFileEditorManagerListener(
             object : FileEditorManagerListener {
                 override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
                     triggerFilePrediction()
+                    associatedContextState.removeAutoCodeSelection()
+                    updateAssociatedContextHeader()
                 }
-            }
+
+                override fun fileOpened(source: FileEditorManager, file: com.intellij.openapi.vfs.VirtualFile) {
+                    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                        source.getSelectedTextEditor()?.let { installSelectionListenerIfNeeded(it) }
+                    }
+                }
+            },
         )
+        // 为已打开的文本编辑器安装选区监听
+        editorManager.selectedTextEditor?.let { installSelectionListenerFor(it) }
+        editorManager.allEditors.forEach { fe ->
+            (fe as? com.intellij.openapi.editor.Editor)?.let { installSelectionListenerFor(it) }
+        }
 
         if (initialConversationId.isNullOrBlank()) {
             showWelcome()
@@ -645,6 +658,62 @@ class JarvisChatTabPanel(
                 updateAssociatedContextHeader()
             }
         }
+    }
+
+    // ── Editor selection auto-prediction ────────────────────────────────
+
+    /** 已安装 SelectionListener 的编辑器，避免重复安装 */
+    private val installedSelectionListeners = mutableSetOf<com.intellij.openapi.editor.Editor>()
+
+    private fun installSelectionListenerIfNeeded(editor: com.intellij.openapi.editor.Editor) {
+        installSelectionListenerFor(editor)
+    }
+
+    private fun installSelectionListenerFor(editor: com.intellij.openapi.editor.Editor) {
+        if (editor in installedSelectionListeners) return
+        installedSelectionListeners.add(editor)
+        editor.selectionModel.addSelectionListener(object : com.intellij.openapi.editor.event.SelectionListener {
+            override fun selectionChanged(e: com.intellij.openapi.editor.event.SelectionEvent) {
+                handleEditorSelectionChanged(e.editor)
+            }
+        })
+    }
+
+    private fun handleEditorSelectionChanged(editor: com.intellij.openapi.editor.Editor) {
+        val selectionModel = editor.selectionModel
+        if (!selectionModel.hasSelection()) {
+            associatedContextState.removeAutoCodeSelection()
+            updateAssociatedContextHeader()
+            return
+        }
+        val selectedText = selectionModel.selectedText
+        if (selectedText.isNullOrBlank()) {
+            associatedContextState.removeAutoCodeSelection()
+            updateAssociatedContextHeader()
+            return
+        }
+        val document = editor.document
+        val virtualFile = com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().getFile(document)
+        if (virtualFile == null) {
+            associatedContextState.removeAutoCodeSelection()
+            updateAssociatedContextHeader()
+            return
+        }
+        val startLine = document.getLineNumber(selectionModel.selectionStart)
+        val endLine = document.getLineNumber(selectionModel.selectionEnd)
+        val startOffset = document.getLineStartOffset(startLine)
+        val endOffset = document.getLineEndOffset(endLine)
+        val fullLineText = document.getText(com.intellij.openapi.util.TextRange(startOffset, endOffset))
+
+        associatedContextState.setAutoCodeSelection(
+            AssociatedContextItem.AssociatedCodeSelection(
+                filePath = virtualFile.path,
+                startLine = startLine + 1,
+                endLine = endLine + 1,
+                fullLineText = fullLineText,
+            )
+        )
+        updateAssociatedContextHeader()
     }
 
     // ── Message cards ────────────────────────────────────────────────

@@ -18,6 +18,8 @@ internal class AssociatedContextState {
     private val items = linkedMapOf<String, AssociatedContextItem>()
     /** 系统预测推荐的文件列表（置灰显示，点击后加入 items） */
     private val predictedItems = linkedMapOf<String, AssociatedContextItem.AssociatedFile>()
+    /** 自动关联代码选区的固定 key，同一时间只保留一个 */
+    private val AUTO_CODE_SELECTION_KEY = "auto-code-selection"
 
     /**
      * 获取所有已选中的关联上下文项（不含推荐文件）。
@@ -38,7 +40,9 @@ internal class AssociatedContextState {
      *
      * @return 全部上下文项列表
      */
-    fun allItems(): List<AssociatedContextItem> = items.values.toList() + predictedItems.values.toList()
+    fun allItems(): List<AssociatedContextItem> {
+        return items.values.toList() + predictedItems.values.toList()
+    }
 
     /**
      * 添加关联上下文项，如已存在则返回 Existing 结果。
@@ -133,5 +137,20 @@ internal class AssociatedContextState {
      */
     fun removePredicted(file: AssociatedContextItem.AssociatedFile) {
         predictedItems.remove(file.key)
+    }
+
+    /**
+     * 自动关联代码选区：直接加入已选中列表（替换之前的自动选区）。
+     */
+    fun setAutoCodeSelection(selection: AssociatedContextItem.AssociatedCodeSelection) {
+        items.remove(AUTO_CODE_SELECTION_KEY)
+        items[AUTO_CODE_SELECTION_KEY] = selection
+    }
+
+    /**
+     * 移除自动关联的代码选区（失焦时调用）。
+     */
+    fun removeAutoCodeSelection() {
+        items.remove(AUTO_CODE_SELECTION_KEY)
     }
 }

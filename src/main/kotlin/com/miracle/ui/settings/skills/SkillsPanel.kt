@@ -216,6 +216,8 @@ class SkillsPanel(private val project: Project, parentDisposable: Disposable) : 
             add(JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
                 isOpaque = false
+                add(createDeleteButton(skill))
+                add(Box.createHorizontalStrut(JBUI.scale(4)))
                 add(createLocateButton(skill))
                 add(Box.createHorizontalStrut(JBUI.scale(6)))
                 add(toggle)
@@ -348,5 +350,42 @@ class SkillsPanel(private val project: Project, parentDisposable: Disposable) : 
         }
         FileEditorManager.getInstance(project).openFile(vf, true)
         ProjectView.getInstance(project).select(vf, vf, true)
+    }
+
+    private fun createDeleteButton(skill: SkillConfig): JButton {
+        return JButton(AllIcons.Actions.GC).apply {
+            toolTipText = "Delete skill"
+            isOpaque = false
+            isContentAreaFilled = false
+            border = JBUI.Borders.empty()
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            addActionListener { deleteSkill(skill) }
+            preferredSize = Dimension(JBUI.scale(28), JBUI.scale(28))
+            maximumSize = preferredSize
+        }
+    }
+
+    private fun deleteSkill(skill: SkillConfig) {
+        val confirmed = Messages.showOkCancelDialog(
+            project,
+            "确定要删除 Skill \"${skill.name}\" 吗？\n将删除整个 Skill 目录及其所有文件，此操作不可撤销。",
+            "Delete Skill",
+            "Delete",
+            "Cancel",
+            Messages.getQuestionIcon(),
+        )
+        if (confirmed != Messages.OK) return
+
+        try {
+            val skillDir = java.io.File(skill.filePath).parentFile
+            if (skillDir != null && skillDir.exists()) {
+                skillDir.deleteRecursively()
+                LocalFileSystem.getInstance().refresh(false)
+            }
+            agentService.skillLoader.clearCache()
+            refresh()
+        } catch (e: Exception) {
+            Messages.showErrorDialog(project, "删除 Skill 失败：${e.message}", "删除失败")
+        }
     }
 }
